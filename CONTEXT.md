@@ -18,7 +18,7 @@ _Avoid_: mermaid code, markup
 A Mermaid Block the page itself labels as Mermaid, e.g. a code element tagged with the Mermaid language.
 
 **Source Repair**:
-The fixes applied to Mermaid Source before drawing it, limited to undoing editor substitutions that can't change meaning: non-breaking or odd spaces, and curly quotes turned back into straight ones.
+The fixes applied to Mermaid Source before drawing it, limited to undoing editor substitutions that can't change meaning: odd spaces become normal spaces, invisible zero-width spaces are removed, and curly quotes become straight ones unless they sit inside a label that is already in straight quotes.
 
 **Sniffed Block**:
 A Mermaid Block found in an unlabelled code element because its text starts with a Mermaid diagram keyword.

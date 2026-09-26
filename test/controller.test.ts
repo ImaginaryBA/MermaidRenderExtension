@@ -66,7 +66,6 @@ describe("Render Toggle", () => {
     expect(diagram()).toBeNull();
     expect(isHidden(document.getElementById("code")!)).toBe(false);
   });
-
 });
 
 describe("Render Error", () => {
@@ -102,7 +101,7 @@ describe("Render Error", () => {
     expect(renderError(1)).toBeNull();
   });
 
-  test("the toggle still switches back to the code", async () => {
+  test("the Render Toggle still switches back to Code View", async () => {
     await mountPage(MARKED, { renderer: failOn("A-->B") });
 
     toggles()[0].click();

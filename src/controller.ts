@@ -71,11 +71,11 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
       (el as HTMLElement).style.setProperty("display", "none", "important");
     }
     diagram.textContent = strings.rendering;
-    const result = await renderSafely(renderer, block.source);
+    const result = await renderSafely(renderer, block.repairedSource);
     const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
     if (svg) diagram.replaceChildren(svg);
-    else diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, block.repaired));
+    else diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, block.repairedSource !== block.source));
   });
 
   const first = block.elements[0];
@@ -99,7 +99,7 @@ function restoreStyle(el: Element, style: string | null): void {
 function renderErrorView(doc: Document, message: string, repaired: boolean): HTMLElement {
   const error = doc.createElement("div");
   error.className = "error";
-  error.setAttribute("role", "alert");
+  error.setAttribute("role", "status");
   const summary = doc.createElement("p");
   summary.textContent = strings.renderError;
   error.append(summary);
