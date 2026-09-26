@@ -21,7 +21,7 @@ A Mermaid Block the page itself labels as Mermaid, e.g. a code element tagged wi
 A Mermaid Block found in an unlabelled code element because its text starts with a Mermaid diagram keyword.
 
 **Text Fence**:
-A Mermaid Block written as plain page text between a ```` ```mermaid ```` line and a closing ```` ``` ```` line, outside any code element.
+A Mermaid Block written as plain page text between a ```` ```mermaid ```` line and a closing ```` ``` ```` line, outside any code element. All of its lines must be consecutive siblings under one parent element.
 _Avoid_: fenced block, markdown block
 
 ### Showing blocks
@@ -40,6 +40,9 @@ _Avoid_: switch, button (when naming the concept)
 
 **Render Error**:
 What a block in Diagram View shows in place of a Diagram when its Mermaid Source can't be drawn.
+
+**Editing Surface**:
+Any part of a page where the user is editing content, such as a wiki editor or a text box. The extension never detects Mermaid Blocks inside one.
 
 **Disabled Site**:
 A site on which the user has turned the extension off; no Mermaid Blocks are detected there.
