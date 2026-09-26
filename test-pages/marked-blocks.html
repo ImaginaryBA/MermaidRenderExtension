@@ -27,6 +27,14 @@
   <pre><code class="language-mermaid">flowchart TD
     A --> </code></pre>
 
+  <p>Curly quotes and non-breaking spaces from an editor (Source Repair makes this draw):</p>
+  <pre><code class="language-mermaid">flowchart LR
+&nbsp;&nbsp;&nbsp;&nbsp;A[&ldquo;Draft&rdquo;] --&gt; B[Don&rsquo;t publish yet]</code></pre>
+
+  <p>Invalid <em>and</em> repaired (the Render Error mentions the repair):</p>
+  <pre><code class="language-mermaid">flowchart LR
+&nbsp;&nbsp;&nbsp;&nbsp;A[&ldquo;Draft&rdquo;] --&gt;</code></pre>
+
   <p>Not Mermaid (no toggle):</p>
   <pre><code class="language-js">const graph = { A: ["B"] };</code></pre>
 </body>

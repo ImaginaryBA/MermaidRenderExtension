@@ -54,3 +54,37 @@ describe("Marked Blocks", () => {
     expect(findMermaidBlocks(root).map((b) => b.source)).toEqual(["graph TD; one", "graph TD; two"]);
   });
 });
+
+describe("Source Repair", () => {
+  function sourceOf(text: string) {
+    const [block] = findMermaidBlocks(page(`<pre><code class="language-mermaid">${text}</code></pre>`));
+    return { source: block.source, repaired: block.repaired };
+  }
+
+  test("source without editor substitutions is left alone", () => {
+    expect(sourceOf(`graph TD\n  A["It's fine"] --> B`)).toEqual({
+      source: `graph TD\n  A["It's fine"] --> B`,
+      repaired: false,
+    });
+  });
+
+  test.each([
+    ["non-breaking spaces", "graph TD\n  A --> B"],
+    ["narrow and figure spaces", "graph TD\n  A --> B"],
+    ["em and thin spaces", "graph TD\n  A --> B"],
+    ["ideographic spaces", "graph　TD\n　　A --> B"],
+  ])("%s become normal spaces", (_name, text) => {
+    expect(sourceOf(text)).toEqual({ source: "graph TD\n  A --> B", repaired: true });
+  });
+
+  test("zero-width characters are removed", () => {
+    expect(sourceOf("graph​ TD\n  A﻿ --> B")).toEqual({ source: "graph TD\n  A --> B", repaired: true });
+  });
+
+  test("curly quotes become straight quotes", () => {
+    expect(sourceOf("graph TD\n  A[“Start”] --> B[Don’t ‘stop’]")).toEqual({
+      source: `graph TD\n  A["Start"] --> B[Don't 'stop']`,
+      repaired: true,
+    });
+  });
+});

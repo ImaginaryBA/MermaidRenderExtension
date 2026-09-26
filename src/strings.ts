@@ -3,6 +3,8 @@ export const strings = {
   showDiagram: "Show diagram",
   showCode: "Show code",
   rendering: "Rendering diagram…",
-  renderError: "Could not render this diagram",
+  renderError: "Could not render this diagram.",
+  sourceRepaired: "Some spaces or quotes in this block were fixed before drawing, which may be related to the error.",
+  errorDetails: "Details",
   notSvg: "Mermaid did not produce an SVG image.",
 } as const;

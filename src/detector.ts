@@ -1,9 +1,13 @@
+import { repairSource } from "./source-repair";
+
 export type MermaidBlockKind = "marked";
 
 export interface MermaidBlock {
   kind: MermaidBlockKind;
-  /** The Mermaid Source, exactly as the page shows it. */
+  /** The Mermaid Source, after Source Repair. */
   source: string;
+  /** Whether Source Repair changed anything. */
+  repaired: boolean;
   /** The page elements the block covers; hidden while in Diagram View. */
   elements: Element[];
 }
@@ -20,7 +24,7 @@ export function findMermaidBlocks(root: ParentNode): MermaidBlock[] {
     if (covered.some((c) => c.contains(container))) continue;
     covered.push(container);
   }
-  return covered.map((el) => ({ kind: "marked", source: el.textContent ?? "", elements: [el] }));
+  return covered.map((el) => ({ kind: "marked", ...repairSource(el.textContent ?? ""), elements: [el] }));
 }
 
 function isMarked(el: Element): boolean {
