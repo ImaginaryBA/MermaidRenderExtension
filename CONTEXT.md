@@ -17,6 +17,9 @@ _Avoid_: mermaid code, markup
 **Marked Block**:
 A Mermaid Block the page itself labels as Mermaid, e.g. a code element tagged with the Mermaid language.
 
+**Source Repair**:
+The fixes applied to Mermaid Source before drawing it, limited to undoing editor substitutions that can't change meaning: non-breaking or odd spaces, and curly quotes turned back into straight ones.
+
 **Sniffed Block**:
 A Mermaid Block found in an unlabelled code element because its text starts with a Mermaid diagram keyword.
 
@@ -37,6 +40,13 @@ _Avoid_: enabled/disabled, on/off
 **Render Toggle**:
 The per-block control that switches a Mermaid Block between Code View and Diagram View.
 _Avoid_: switch, button (when naming the concept)
+
+**Diagram Viewer**:
+A full-screen overlay that shows one Diagram at a time and lets the user zoom and pan it freely. It sits alongside inline zoom on the Diagram in the page.
+_Avoid_: lightbox, modal, popup
+
+**Bulk Action**:
+A popup action that sets the Block View of every Mermaid Block on the current page at once: "Render all" or "Show all code". Like any Block View, it isn't remembered after a reload.
 
 **Render Error**:
 What a block in Diagram View shows in place of a Diagram when its Mermaid Source can't be drawn.
