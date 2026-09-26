@@ -1,5 +1,5 @@
 import { findMermaidBlocks, type MermaidBlock } from "./detector";
-import type { Renderer, Settings } from "./ports";
+import type { Renderer, RenderResult, Settings } from "./ports";
 import { strings } from "./strings";
 
 export interface Ports {
@@ -13,7 +13,7 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
   for (const block of findMermaidBlocks(doc.body)) attach(doc, block, renderer);
 }
 
-const HOST_TAG = "mermaid-render-block";
+export const HOST_TAG = "mermaid-render-block";
 
 const STYLE = `
 :host { display: block; position: relative; }
@@ -69,18 +69,20 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
     }
     diagram.classList.remove("error");
     diagram.textContent = strings.rendering;
-    const result = await renderer.render(block.source);
+    const result = await renderSafely(renderer, block.source);
+    const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
-    if (result.ok) diagram.replaceChildren(parseSvg(doc, result.svg));
+    if (svg) diagram.replaceChildren(svg);
     else {
       diagram.classList.add("error");
-      diagram.textContent = `${strings.renderError}:\n${result.message}`;
+      diagram.textContent = `${strings.renderError}:\n${result.ok ? strings.notSvg : result.message}`;
     }
   });
 
-  const offset = block.elements[0];
+  const first = block.elements[0];
   const hover = (on: boolean) => () => {
-    if (on) host.style.setProperty("--mre-offset", getComputedStyle(offset).marginTop);
+    // Line the toggle up with the block's top edge rather than its top margin.
+    if (on) host.style.setProperty("--mre-offset", getComputedStyle(first).marginTop);
     host.toggleAttribute("data-hover", on);
   };
   for (const el of [host, ...block.elements]) {
@@ -94,9 +96,31 @@ function restoreStyle(el: Element, style: string | null): void {
   else el.setAttribute("style", style);
 }
 
-/** Parses SVG markup inertly (the HTML parser never runs scripts) and returns it for insertion. */
-function parseSvg(doc: Document, svg: string): Node {
+async function renderSafely(renderer: Renderer, source: string): Promise<RenderResult> {
+  try {
+    return await renderer.render(source);
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+const UNSAFE_ELEMENTS = "script, foreignObject, iframe, object, embed, img, image, audio, video";
+
+/**
+ * Parses SVG markup inertly (the HTML parser never runs scripts) and strips anything that could
+ * run script once it's in the page. Mermaid's strict mode already sanitizes; this is defence in depth.
+ */
+function parseSvg(doc: Document, svg: string): SVGSVGElement | null {
   const parsed = new DOMParser().parseFromString(svg, "text/html");
   const el = parsed.querySelector("svg");
-  return el ? doc.adoptNode(el) : doc.createTextNode(strings.renderError);
+  if (!el) return null;
+  for (const unsafe of el.querySelectorAll(UNSAFE_ELEMENTS)) unsafe.remove();
+  for (const node of [el, ...el.querySelectorAll("*")]) {
+    for (const attr of [...node.attributes]) {
+      const isHandler = attr.name.toLowerCase().startsWith("on");
+      const isScriptUrl = /^\s*javascript:/i.test(attr.value.replace(/[\u0000-\u001f]/g, ""));
+      if (isHandler || isScriptUrl) node.removeAttribute(attr.name);
+    }
+  }
+  return doc.adoptNode(el);
 }

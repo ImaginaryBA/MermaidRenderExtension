@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { HOST_TAG } from "../src/controller";
 import { diagram, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
@@ -72,8 +73,33 @@ describe("Render Toggle", () => {
 
     toggles()[0].click();
 
-    await waitFor(() => expect(document.querySelector("mermaid-render-block")!.shadowRoot!.textContent).toContain("Parse error on line 1"));
+    await waitFor(() => expect(document.querySelector(HOST_TAG)!.shadowRoot!.textContent).toContain("Parse error on line 1"));
     expect(diagram()).toBeNull();
+  });
+});
+
+describe("Diagram safety", () => {
+  test("a renderer that throws shows a Render Error instead of getting stuck", async () => {
+    const renderer = fakeRenderer(() => {
+      throw new Error("Mermaid failed to load");
+    });
+    await mountPage(MARKED, { renderer });
+
+    toggles()[0].click();
+
+    await waitFor(() => expect(document.querySelector(HOST_TAG)!.shadowRoot!.textContent).toContain("Mermaid failed to load"));
+  });
+
+  test("script hooks in the drawn SVG are stripped before it reaches the page", async () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><a href="javascript:alert(2)"><text onclick="alert(3)">A</text></a><script>alert(4)</script><foreignObject><img src="x" onerror="alert(5)"></foreignObject></svg>`;
+    await mountPage(MARKED, { renderer: fakeRenderer(() => ({ ok: true, svg })) });
+
+    toggles()[0].click();
+
+    await waitFor(() => expect(diagram()).not.toBeNull());
+    const html = diagram()!.outerHTML;
+    expect(html).not.toMatch(/on(load|click|error)=|javascript:|<script|<foreignObject|<img/i);
+    expect(diagram()!.textContent).toBe("A");
   });
 });
 

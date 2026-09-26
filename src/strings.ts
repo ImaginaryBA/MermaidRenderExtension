@@ -4,4 +4,5 @@ export const strings = {
   showCode: "Show code",
   rendering: "Rendering diagram…",
   renderError: "Could not render this diagram",
+  notSvg: "Mermaid did not produce an SVG image.",
 } as const;

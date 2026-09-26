@@ -21,7 +21,12 @@ export function mermaidRenderer(): Renderer {
         loading = undefined;
         return { ok: false, message: `Mermaid failed to load: ${String(error)}` };
       }
-      return globalThis.mermaidRenderExtension!.render(source);
+      const mermaid = globalThis.mermaidRenderExtension;
+      if (!mermaid) {
+        loading = undefined;
+        return { ok: false, message: "Mermaid failed to load." };
+      }
+      return mermaid.render(source);
     },
   };
 }

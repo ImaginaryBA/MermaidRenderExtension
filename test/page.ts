@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { mount } from "../src/controller";
+import { HOST_TAG, mount } from "../src/controller";
 import type { Renderer, RenderResult, Settings } from "../src/ports";
 
 export interface FakeRenderer extends Renderer {
@@ -51,5 +51,5 @@ export function waitFor(assertion: () => void): Promise<void> {
 }
 
 function hosts(): Element[] {
-  return [...document.querySelectorAll("mermaid-render-block")];
+  return [...document.querySelectorAll(HOST_TAG)];
 }
