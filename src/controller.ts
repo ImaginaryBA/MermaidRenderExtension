@@ -26,7 +26,10 @@ button {
 :host([data-hover]) button, button:focus-visible, button[aria-pressed="true"] { opacity: 1; }
 .diagram:empty { display: none; }
 .diagram { padding: 8px 0; overflow: hidden; }
-.diagram.error { white-space: pre-wrap; font: 12px/1.4 ui-monospace, monospace; }
+.error { font: 13px/1.4 system-ui, sans-serif; border-left: 3px solid #d33; padding: 4px 8px; }
+.error p { margin: 0 0 4px; }
+.error summary { cursor: pointer; }
+.error pre { white-space: pre-wrap; font: 12px/1.4 ui-monospace, monospace; margin: 4px 0 0; }
 .diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 `;
 
@@ -67,16 +70,12 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
       hidden.set(el, el.getAttribute("style"));
       (el as HTMLElement).style.setProperty("display", "none", "important");
     }
-    diagram.classList.remove("error");
     diagram.textContent = strings.rendering;
-    const result = await renderSafely(renderer, block.source);
+    const result = await renderSafely(renderer, block.repairedSource);
     const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
     if (svg) diagram.replaceChildren(svg);
-    else {
-      diagram.classList.add("error");
-      diagram.textContent = `${strings.renderError}:\n${result.ok ? strings.notSvg : result.message}`;
-    }
+    else diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, block.repairedSource !== block.source));
   });
 
   const first = block.elements[0];
@@ -94,6 +93,29 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
 function restoreStyle(el: Element, style: string | null): void {
   if (style === null) el.removeAttribute("style");
   else el.setAttribute("style", style);
+}
+
+/** A Render Error: a short summary, a note if Source Repair was involved, and Mermaid's message in an expandable section. */
+function renderErrorView(doc: Document, message: string, repaired: boolean): HTMLElement {
+  const error = doc.createElement("div");
+  error.className = "error";
+  error.setAttribute("role", "status");
+  const summary = doc.createElement("p");
+  summary.textContent = strings.renderError;
+  error.append(summary);
+  if (repaired) {
+    const note = doc.createElement("p");
+    note.textContent = strings.sourceRepaired;
+    error.append(note);
+  }
+  const details = doc.createElement("details");
+  const label = doc.createElement("summary");
+  label.textContent = strings.errorDetails;
+  const pre = doc.createElement("pre");
+  pre.textContent = message;
+  details.append(label, pre);
+  error.append(details);
+  return error;
 }
 
 async function renderSafely(renderer: Renderer, source: string): Promise<RenderResult> {

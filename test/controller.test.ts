@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { HOST_TAG } from "../src/controller";
-import { diagram, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
+import { diagram, renderError, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
 
@@ -67,14 +66,75 @@ describe("Render Toggle", () => {
     expect(diagram()).toBeNull();
     expect(isHidden(document.getElementById("code")!)).toBe(false);
   });
+});
 
-  test("a Render Error is shown instead of a Diagram when drawing fails", async () => {
-    await mountPage(MARKED, { renderer: fakeRenderer(() => ({ ok: false, message: "Parse error on line 1" })) });
+describe("Render Error", () => {
+  const failOn = (bad: string) =>
+    fakeRenderer((source) =>
+      source.includes(bad)
+        ? { ok: false, message: "Parse error on line 2:\n  A -->\n------^" }
+        : { ok: true, svg: `<svg><text>${source}</text></svg>` },
+    );
+
+  test("shows a summary with Mermaid's message in an expandable section, instead of a Diagram", async () => {
+    await mountPage(MARKED, { renderer: failOn("A-->B") });
 
     toggles()[0].click();
 
-    await waitFor(() => expect(document.querySelector(HOST_TAG)!.shadowRoot!.textContent).toContain("Parse error on line 1"));
+    await waitFor(() => expect(renderError()).not.toBeNull());
+    expect(renderError()!.summary).toContain("Could not render this diagram");
+    expect(renderError()!.detail).toBe("Parse error on line 2:\n  A -->\n------^");
     expect(diagram()).toBeNull();
+  });
+
+  test("affects only its own block", async () => {
+    await mountPage(
+      `<pre id="bad"><code class="language-mermaid">graph TD; broken</code></pre>
+       <pre id="good"><code class="language-mermaid">graph TD; A-->B</code></pre>`,
+      { renderer: failOn("broken") },
+    );
+
+    for (const t of toggles()) t.click();
+
+    await waitFor(() => expect(diagram(1)?.textContent).toBe("graph TD; A-->B"));
+    expect(renderError(0)).not.toBeNull();
+    expect(renderError(1)).toBeNull();
+  });
+
+  test("the Render Toggle still switches back to Code View", async () => {
+    await mountPage(MARKED, { renderer: failOn("A-->B") });
+
+    toggles()[0].click();
+    await waitFor(() => expect(renderError()).not.toBeNull());
+    toggles()[0].click();
+
+    expect(renderError()).toBeNull();
+    expect(isHidden(document.getElementById("code")!)).toBe(false);
+  });
+
+  test("says when Source Repair changed the block", async () => {
+    await mountPage(
+      `<pre><code class="language-mermaid">graph TD;\u00a0broken</code></pre>
+       <pre><code class="language-mermaid">graph TD; broken</code></pre>`,
+      { renderer: failOn("broken") },
+    );
+
+    for (const t of toggles()) t.click();
+
+    await waitFor(() => expect(renderError(1)).not.toBeNull());
+    expect(renderError(0)!.summary).toMatch(/spaces or quotes .* fixed/i);
+    expect(renderError(1)!.summary).not.toMatch(/fixed/i);
+  });
+});
+
+describe("Source Repair", () => {
+  test("the Diagram is drawn from the repaired source", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(`<pre><code class="language-mermaid">graph TD;\u00a0A[\u201cStart\u201d]</code></pre>`, { renderer });
+
+    toggles()[0].click();
+
+    await waitFor(() => expect(renderer.calls).toEqual(['graph TD; A["Start"]']));
   });
 });
 
@@ -87,7 +147,7 @@ describe("Diagram safety", () => {
 
     toggles()[0].click();
 
-    await waitFor(() => expect(document.querySelector(HOST_TAG)!.shadowRoot!.textContent).toContain("Mermaid failed to load"));
+    await waitFor(() => expect(renderError()?.detail).toBe("Mermaid failed to load"));
   });
 
   test("script hooks in the drawn SVG are stripped before it reaches the page", async () => {

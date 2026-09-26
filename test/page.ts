@@ -42,6 +42,19 @@ export function diagram(n = 0): SVGElement | null {
   return hosts()[n]?.shadowRoot!.querySelector("svg") ?? null;
 }
 
+/** What the n-th block's Render Error says, or null if it isn't showing one. */
+export function renderError(n = 0) {
+  const error = hosts()[n]?.shadowRoot!.querySelector("[role=status]");
+  if (!error) return null;
+  const details = error.querySelector("details");
+  return {
+    /** The text shown before the expandable section is opened. */
+    summary: [...error.children].filter((c) => c !== details).map((c) => c.textContent).join(" "),
+    /** The text inside the expandable section. */
+    detail: details ? [...details.childNodes].filter((c) => c.nodeName !== "SUMMARY").map((c) => c.textContent).join("") : null,
+  };
+}
+
 export function isHidden(el: Element): boolean {
   return getComputedStyle(el).display === "none";
 }
