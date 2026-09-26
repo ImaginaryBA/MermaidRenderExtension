@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Marked Blocks</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2em auto; padding: 0 16px; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Marked Blocks</h1>
+  <p>A <code>language-mermaid</code> code block:</p>
+  <pre><code class="language-mermaid">flowchart TD
+    A[Reader opens page] --> B{Mermaid Block?}
+    B -- yes --> C[Render Toggle]
+    B -- no --> D[Nothing happens]</code></pre>
+
+  <p>A <code>&lt;pre lang="mermaid"&gt;</code> block:</p>
+  <pre lang="mermaid">sequenceDiagram
+    Reader->>Extension: flip toggle
+    Extension->>Mermaid: render source
+    Mermaid-->>Extension: SVG
+    Extension-->>Reader: Diagram</pre>
+
+  <p>An invalid block (should show a Render Error):</p>
+  <pre><code class="language-mermaid">flowchart TD
+    A --> </code></pre>
+
+  <p>Not Mermaid (no toggle):</p>
+  <pre><code class="language-js">const graph = { A: ["B"] };</code></pre>
+</body>
+</html>

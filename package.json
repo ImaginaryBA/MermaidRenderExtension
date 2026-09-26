@@ -1,0 +1,26 @@
+{
+  "name": "mermaid-render-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Firefox extension that renders Mermaid code blocks on web pages, block by block.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test && npm run build",
+    "start": "npm run build && web-ext run --source-dir dist --start-url \"$(pwd)/test-pages/marked-blocks.html\""
+  },
+  "devDependencies": {
+    "@types/firefox-webext-browser": "^143.0.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "web-ext": "^10.7.0"
+  },
+  "dependencies": {
+    "mermaid": "^12.0.0"
+  }
+}
