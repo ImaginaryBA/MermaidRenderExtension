@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Mermaid Render",
+  "version": "0.1.0",
+  "description": "Adds a toggle to Mermaid code blocks on web pages to show the diagram they describe.",
+  "permissions": ["scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "scripts": ["background.js"], "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle" }]
+}
