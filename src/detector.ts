@@ -1,4 +1,5 @@
 import { startsWithDiagramKeyword } from "./diagram-keywords";
+import { isInEditingSurface } from "./editing-surfaces";
 import { repairSource } from "./source-repair";
 import { findTextFences } from "./text-fences";
 
@@ -17,7 +18,7 @@ export interface MermaidBlock {
 /** A detected block before Source Repair. */
 type Candidate = { kind: MermaidBlockKind; elements: Element[]; source: string };
 
-/** Finds the Mermaid Blocks under `root`, in document order. */
+/** Finds the Mermaid Blocks under `root`, in document order, leaving out any inside an Editing Surface. */
 export function findMermaidBlocks(root: Element): MermaidBlock[] {
   const found = findMarked(root);
   found.push(...findSniffed(root, found));
@@ -25,6 +26,7 @@ export function findMermaidBlocks(root: Element): MermaidBlock[] {
     if (!found.some((f) => overlaps(f.elements, fence.elements))) found.push({ kind: "text-fence", ...fence });
   }
   return found
+    .filter((f) => !isInEditingSurface(f.elements[0]))
     .sort((a, b) => documentOrder(a.elements[0], b.elements[0]))
     .map(({ kind, elements, source }) => ({ kind, source, repairedSource: repairSource(source), elements }));
 }

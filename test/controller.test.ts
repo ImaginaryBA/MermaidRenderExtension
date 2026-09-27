@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { HOST_TAG } from "../src/controller";
+import type { RenderResult } from "../src/ports";
 import { diagram, renderError, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
@@ -225,5 +226,56 @@ describe("Disabled Site", () => {
     await mountPage(MARKED, { settings: fakeSettings({ disabled: true }) });
 
     expect(toggles()).toEqual([]);
+  });
+});
+
+describe("Editing Surfaces", () => {
+  /** `html` as the page serializes it once parsed. */
+  const serialized = (html: string) => Object.assign(document.createElement("div"), { innerHTML: html }).innerHTML;
+
+  test("a block in Diagram View returns to Code View and loses its toggle when its region becomes editable", async () => {
+    await mountPage(`<div id="region">${MARKED}</div>`);
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+
+    document.getElementById("region")!.setAttribute("contenteditable", "true");
+
+    await waitFor(() => expect(toggles()).toEqual([]));
+    expect(document.getElementById("region")!.innerHTML).toBe(serialized(MARKED));
+    expect(isHidden(document.getElementById("code")!)).toBe(false);
+  });
+
+  test("a block still rendering when its region becomes editable never shows the Diagram", async () => {
+    let finish!: (result: RenderResult) => void;
+    const renderer = { calls: [], render: () => new Promise<RenderResult>((done) => (finish = done)) };
+    await mountPage(`<div id="region">${MARKED}</div>`, { renderer });
+    toggles()[0].click();
+
+    document.getElementById("region")!.setAttribute("contenteditable", "");
+    await waitFor(() => expect(toggles()).toEqual([]));
+    finish({ ok: true, svg: `<svg xmlns="http://www.w3.org/2000/svg"></svg>` });
+    // Nothing should change, so there is no condition to wait for: give the render time to land.
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(document.getElementById("region")!.innerHTML).toBe(serialized(MARKED));
+  });
+
+  test("a block moved into an editable region after mount loses its toggle", async () => {
+    await mountPage(`<div id="region">${MARKED}</div><div id="editor" contenteditable="true"></div>`);
+
+    document.getElementById("editor")!.append(document.getElementById("region")!);
+
+    await waitFor(() => expect(toggles()).toEqual([]));
+  });
+
+  test("blocks outside the region that became editable keep their toggles", async () => {
+    await mountPage(`<div id="region">${MARKED}</div><div>${MARKED.replace('id="code"', 'id="other"')}</div>`);
+
+    document.getElementById("region")!.setAttribute("contenteditable", "true");
+
+    await waitFor(() => expect(toggles()).toHaveLength(1));
+    expect(toggles()[0].getRootNode()).toBe(
+      document.getElementById("other")!.previousElementSibling!.shadowRoot,
+    );
   });
 });

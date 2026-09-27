@@ -5,4 +5,4 @@ Switching to Diagram View hides the page's original elements and inserts the Dia
 ## Consequences
 
 - Hiding means adding an inline `display: none !important` to each covered element while it's in Diagram View. Code View restores the element's previous `style` attribute exactly. This is the only change made to the page's own elements.
-- The Render Toggle lives in an element inserted as a sibling just before the block. It stays there in Code View too, so CSS selectors that depend on sibling order (such as `h2 + pre`) can match differently on pages with Mermaid Blocks.
+- The Render Toggle lives in an element inserted as a sibling just before the block. It stays there in Code View too, so CSS selectors that depend on sibling order (such as `h2 + pre`) can match differently on pages with Mermaid Blocks. The one exception is a block that ends up inside an Editing Surface: its Render Toggle is removed, so an editor never saves it.
