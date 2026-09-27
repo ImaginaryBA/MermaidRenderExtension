@@ -213,3 +213,87 @@ describe("Sniffed Blocks", () => {
     ]);
   });
 });
+
+describe("Text Fences", () => {
+  const ids = (els: Element[]) => els.map((el) => el.id);
+
+  test("a fence written as one paragraph per line covers every line, fences included", () => {
+    const root = page(`<p>Intro</p>
+      <p id="open">\`\`\`mermaid</p>
+      <p id="l1">graph TD</p>
+      <p id="l2">  A --&gt; <strong>B</strong></p>
+      <p id="blank"></p>
+      <p id="l3">  B --&gt; C</p>
+      <p id="close">\`\`\`</p>
+      <p>Outro</p>`);
+
+    const blocks = findMermaidBlocks(root);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("text-fence");
+    expect(blocks[0].source).toBe("graph TD\n  A --> B\n\n  B --> C");
+    expect(ids(blocks[0].elements)).toEqual(["open", "l1", "l2", "blank", "l3", "close"]);
+  });
+
+  test("a fence written as <div> lines is detected", () => {
+    const root = page(`<div id="open">\`\`\`mermaid</div><div id="l1">sequenceDiagram</div><div id="l2">A->>B: hi</div><div id="close">\`\`\`</div>`);
+
+    const [block] = findMermaidBlocks(root);
+
+    expect([block.kind, block.source, ids(block.elements)]).toEqual([
+      "text-fence",
+      "sequenceDiagram\nA->>B: hi",
+      ["open", "l1", "l2", "close"],
+    ]);
+  });
+
+  test("a fence written as <br>-separated lines in one element covers that element", () => {
+    const root = page(`<p>Intro</p><p id="f">\`\`\`mermaid<br>graph TD<br>  A --&gt; B<br>\`\`\`</p>`);
+
+    const [block] = findMermaidBlocks(root);
+
+    expect([block.kind, block.source, ids(block.elements)]).toEqual(["text-fence", "graph TD\n  A --> B", ["f"]]);
+  });
+
+  test("a line paragraph may itself contain <br> line breaks", () => {
+    const root = page(`<p id="open">\`\`\`mermaid</p><p id="l">graph TD<br>  A --&gt; B</p><p id="close">\`\`\`</p>`);
+
+    expect(findMermaidBlocks(root)[0].source).toBe("graph TD\n  A --> B");
+  });
+
+  test("fence lines wrapped in inline formatting are still recognised", () => {
+    const root = page(`<p id="open"><span>\`\`\`mermaid</span></p><p id="l">graph TD</p><p id="close"><em>\`\`\`</em></p>`);
+
+    expect(ids(findMermaidBlocks(root)[0].elements)).toEqual(["open", "l", "close"]);
+  });
+
+  test("two fences in a row are two blocks", () => {
+    const root = page(`<p>\`\`\`mermaid</p><p>graph TD; one</p><p>\`\`\`</p><p>\`\`\`mermaid</p><p>graph TD; two</p><p>\`\`\`</p>`);
+
+    expect(findMermaidBlocks(root).map((b) => b.source)).toEqual(["graph TD; one", "graph TD; two"]);
+  });
+
+  test.each([
+    [
+      "split across table cells",
+      `<table><tr><td><p>\`\`\`mermaid</p><p>graph TD</p></td><td><p>A --&gt; B</p><p>\`\`\`</p></td></tr></table>`,
+    ],
+    ["with no closing line", `<p>\`\`\`mermaid</p><p>graph TD</p><p>A --&gt; B</p>`],
+    ["for another language", `<p>\`\`\`python</p><p>print(1)</p><p>\`\`\`</p>`],
+    ["sharing its element with other text", `<p>Intro<br>\`\`\`mermaid<br>graph TD<br>\`\`\`</p>`],
+    ["interrupted by loose text between the lines", `<div><p>\`\`\`mermaid</p>stray text<p>graph TD</p><p>\`\`\`</p></div>`],
+    ["inside a code element", `<pre><code class="language-markdown">\`\`\`mermaid\ngraph TD\n\`\`\`</code></pre>`],
+    ["inside a script", `<script type="text/plain">\`\`\`mermaid\ngraph TD\n\`\`\`</script>`],
+  ])("a fence %s is not detected", (_name, html) => {
+    expect(findMermaidBlocks(page(html))).toEqual([]);
+  });
+
+  test("all three kinds are returned together in document order", () => {
+    const root = page(`
+      <p>\`\`\`mermaid</p><p>graph TD; fence</p><p>\`\`\`</p>
+      <pre><code class="language-mermaid">graph TD; marked</code></pre>
+      <pre>graph TD; sniffed</pre>`);
+
+    expect(findMermaidBlocks(root).map((b) => b.kind)).toEqual(["text-fence", "marked", "sniffed"]);
+  });
+});

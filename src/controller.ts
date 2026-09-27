@@ -80,8 +80,11 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
 
   const first = block.elements[0];
   const hover = (on: boolean) => () => {
-    // Line the toggle up with the block's top edge rather than its top margin.
-    if (on) host.style.setProperty("--mre-offset", getComputedStyle(first).marginTop);
+    // Line the toggle up with the block's top edge, wherever margin collapsing has put the host.
+    if (on) {
+      const offset = first.getBoundingClientRect().top - host.getBoundingClientRect().top;
+      host.style.setProperty("--mre-offset", `${Math.max(0, offset)}px`);
+    }
     host.toggleAttribute("data-hover", on);
   };
   for (const el of [host, ...block.elements]) {

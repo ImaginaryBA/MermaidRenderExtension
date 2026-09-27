@@ -1,7 +1,8 @@
 import { startsWithDiagramKeyword } from "./diagram-keywords";
 import { repairSource } from "./source-repair";
+import { findTextFences } from "./text-fences";
 
-export type MermaidBlockKind = "marked" | "sniffed";
+export type MermaidBlockKind = "marked" | "sniffed" | "text-fence";
 
 export interface MermaidBlock {
   kind: MermaidBlockKind;
@@ -16,9 +17,13 @@ export interface MermaidBlock {
 type Found = { kind: MermaidBlockKind; elements: Element[]; source: string };
 
 /** Finds the Mermaid Blocks under `root`, in document order. */
-export function findMermaidBlocks(root: ParentNode): MermaidBlock[] {
+export function findMermaidBlocks(root: Element): MermaidBlock[] {
   const found = findMarked(root);
   found.push(...findSniffed(root, found));
+  for (const fence of findTextFences(root)) {
+    const overlaps = found.some((f) => f.elements.some((el) => fence.elements.some((e) => el.contains(e) || e.contains(el))));
+    if (!overlaps) found.push({ kind: "text-fence", ...fence });
+  }
   return found
     .sort((a, b) => (a.elements[0].compareDocumentPosition(b.elements[0]) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
     .map(({ kind, elements, source }) => ({ kind, source, repairedSource: repairSource(source), elements }));

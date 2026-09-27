@@ -1,3 +1,4 @@
+import { HOST_TAG } from "../src/controller";
 import { describe, expect, test } from "vitest";
 import { diagram, renderError, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
 
@@ -78,6 +79,39 @@ describe("Sniffed Blocks", () => {
 
     toggles()[0].click();
     expect(isHidden(document.getElementById("code")!)).toBe(false);
+  });
+});
+
+describe("Text Fences", () => {
+  const FENCE = `<p>Intro</p><p id="open">\`\`\`mermaid</p><p id="l1">graph TD</p><p id="l2">A --&gt; B</p><p id="close">\`\`\`</p><p id="outro">Outro</p>`;
+  const lines = () => ["open", "l1", "l2", "close"].map((id) => document.getElementById(id)!);
+
+  test("the toggle bar sits just before the opening fence line", async () => {
+    await mountPage(FENCE);
+
+    expect(toggles()).toHaveLength(1);
+    expect(document.getElementById("open")!.previousElementSibling?.tagName).toBe(HOST_TAG.toUpperCase());
+  });
+
+  test("Diagram View hides every line of the fence and shows the Diagram", async () => {
+    await mountPage(FENCE);
+
+    toggles()[0].click();
+
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD\nA --> B"));
+    expect(lines().map(isHidden)).toEqual([true, true, true, true]);
+    expect(isHidden(document.getElementById("outro")!)).toBe(false);
+  });
+
+  test("Code View restores every line unchanged", async () => {
+    await mountPage(FENCE);
+    const before = lines().map((el) => el.outerHTML);
+
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+    toggles()[0].click();
+
+    expect(lines().map((el) => el.outerHTML)).toEqual(before);
   });
 });
 

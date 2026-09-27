@@ -49,6 +49,22 @@ stateDiagram-v2
     a -- b;
 }</pre>
 
+  <h2>Text Fences</h2>
+  <p>A fence typed as one paragraph per line, as Confluence stores it:</p>
+  <p>```mermaid</p>
+  <p>flowchart LR</p>
+  <p>&nbsp;&nbsp;&nbsp;&nbsp;Page --&gt; Fence{Text Fence?}</p>
+  <p>&nbsp;&nbsp;&nbsp;&nbsp;Fence -- yes --&gt; Toggle[Render Toggle]</p>
+  <p>```</p>
+
+  <p>A fence with line breaks inside one paragraph:</p>
+  <p>```mermaid<br>pie title Block kinds<br>&nbsp;&nbsp;"Marked" : 2<br>&nbsp;&nbsp;"Sniffed" : 1<br>&nbsp;&nbsp;"Text Fence" : 2<br>```</p>
+
+  <p>A Python fence (no toggle):</p>
+  <p>```python</p>
+  <p>print("hello")</p>
+  <p>```</p>
+
   <p>Not Mermaid (no toggle):</p>
   <pre><code class="language-js">const graph = { A: ["B"] };</code></pre>
 </body>
