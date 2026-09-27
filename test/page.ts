@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { HOST_TAG, mount, RESCAN_DELAY_MS, type Mounted } from "../src/controller";
 import type { Renderer, RenderResult, Settings, Theme } from "../src/ports";
 import { strings } from "../src/strings";
+import { VIEWER_TAG } from "../src/viewer";
 
 export interface FakeRenderer extends Renderer {
   calls: string[];
@@ -81,6 +82,29 @@ export function zoomState(n = 0): { scale: number; x: number; y: number } {
 
 export function zoomLevel(n = 0): number {
   return zoomState(n).scale;
+}
+
+/** The n-th block's button that opens the Diagram Viewer. */
+export function viewerButton(n = 0): HTMLButtonElement {
+  return hosts()[n]!.shadowRoot!.querySelector<HTMLButtonElement>(`button[aria-label="${strings.openViewer}"]`)!;
+}
+
+/** The open Diagram Viewer's parts, or null if none is open. */
+export function viewer() {
+  const overlays = document.querySelectorAll(VIEWER_TAG);
+  if (overlays.length === 0) return null;
+  const root = overlays[overlays.length - 1].shadowRoot!;
+  const button = (label: string) => root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  return {
+    count: overlays.length,
+    root,
+    dialog: root.querySelector<HTMLElement>("[role=dialog]")!,
+    svg: root.querySelector("svg"),
+    close: button(strings.closeViewer),
+    zoomIn: button(strings.zoomIn),
+    zoomOut: button(strings.zoomOut),
+    fit: button(strings.fitToWindow),
+  };
 }
 
 export function isHidden(el: Element): boolean {

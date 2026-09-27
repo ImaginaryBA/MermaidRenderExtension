@@ -10,4 +10,8 @@ export const strings = {
   zoomIn: "Zoom in",
   zoomOut: "Zoom out",
   fitToWidth: "Fit to width",
+  openViewer: "Open full screen",
+  viewerLabel: "Diagram viewer",
+  fitToWindow: "Fit to window",
+  closeViewer: "Close",
 } as const;
