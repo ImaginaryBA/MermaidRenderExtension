@@ -21,10 +21,10 @@ A Mermaid Block the page itself labels as Mermaid, e.g. a code element tagged wi
 The fixes applied to Mermaid Source before drawing it, limited to undoing editor substitutions that can't change meaning: odd spaces become normal spaces, invisible zero-width spaces are removed, and curly quotes become straight ones unless they sit inside a label that is already in straight quotes.
 
 **Sniffed Block**:
-A Mermaid Block found in an unlabelled code element because its text starts with a Mermaid diagram keyword.
+A Mermaid Block found in an unlabelled preformatted code element because its text starts with a Mermaid diagram keyword.
 
 **Text Fence**:
-A Mermaid Block written as plain page text between a ```` ```mermaid ```` line and a closing ```` ``` ```` line, outside any code element. All of its lines must be consecutive siblings under one parent element.
+A Mermaid Block written as plain page text between a ```` ```mermaid ```` line and a closing ```` ``` ```` line, outside any code element. Either all of its lines are consecutive sibling elements under one parent (never spread across table cells), or the whole fence is one element with line breaks between its lines.
 _Avoid_: fenced block, markdown block
 
 ### Showing blocks

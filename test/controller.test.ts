@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { HOST_TAG } from "../src/controller";
 import { diagram, renderError, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
@@ -65,6 +66,52 @@ describe("Render Toggle", () => {
 
     expect(diagram()).toBeNull();
     expect(isHidden(document.getElementById("code")!)).toBe(false);
+  });
+});
+
+describe("Sniffed Blocks", () => {
+  test("toggle between code and Diagram like Marked Blocks", async () => {
+    await mountPage(`<pre id="code">sequenceDiagram\n  A->>B: hi</pre>`);
+
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()?.textContent).toBe("sequenceDiagram\n  A->>B: hi"));
+    expect(isHidden(document.getElementById("code")!)).toBe(true);
+
+    toggles()[0].click();
+    expect(isHidden(document.getElementById("code")!)).toBe(false);
+  });
+});
+
+describe("Text Fences", () => {
+  const FENCE = `<p>Intro</p><p id="open">\`\`\`mermaid</p><p id="l1">graph TD</p><p id="l2">A --&gt; B</p><p id="close">\`\`\`</p><p id="outro">Outro</p>`;
+  const lines = () => ["open", "l1", "l2", "close"].map((id) => document.getElementById(id)!);
+
+  test("the toggle bar sits just before the opening fence line", async () => {
+    await mountPage(FENCE);
+
+    expect(toggles()).toHaveLength(1);
+    expect(document.getElementById("open")!.previousElementSibling?.tagName).toBe(HOST_TAG.toUpperCase());
+  });
+
+  test("Diagram View hides every line of the fence and shows the Diagram", async () => {
+    await mountPage(FENCE);
+
+    toggles()[0].click();
+
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD\nA --> B"));
+    expect(lines().map(isHidden)).toEqual([true, true, true, true]);
+    expect(isHidden(document.getElementById("outro")!)).toBe(false);
+  });
+
+  test("Code View restores every line unchanged", async () => {
+    await mountPage(FENCE);
+    const before = lines().map((el) => el.outerHTML);
+
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+    toggles()[0].click();
+
+    expect(lines().map((el) => el.outerHTML)).toEqual(before);
   });
 });
 

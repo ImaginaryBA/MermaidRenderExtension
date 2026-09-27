@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test && npm run build",
-    "start": "npm run build && web-ext run --source-dir dist --start-url \"$(pwd)/test-pages/marked-blocks.html\""
+    "start": "npm run build && web-ext run --source-dir dist --start-url \"$(pwd)/test-pages/mermaid-blocks.html\""
   },
   "devDependencies": {
     "@types/firefox-webext-browser": "^143.0.0",
