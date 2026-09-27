@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
 import { WORKSPACE_TAG } from "../src/workspace";
+import { answerPopup, GET_BLOCK_COUNT, SET_ALL_VIEWS } from "../src/messages";
 import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, viewer, viewerButton, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
 import { strings } from "../src/strings";
 
@@ -818,5 +819,76 @@ describe("Diagram Viewer: staying in step with its block and the page", () => {
     const host = viewer()!.root.host as HTMLElement;
     expect(host.style.getPropertyPriority("display")).toBe("important");
     expect(host.style.getPropertyValue("display")).toBe("block");
+  });
+});
+
+describe("Bulk Actions and the popup's questions", () => {
+  const THREE = [MARKED, "<pre>graph TD; sniffed</pre>", "<p>```mermaid</p><p>graph TD; fence</p><p>```</p>"].join("");
+  const pressed = () => toggles().map((t) => t.getAttribute("aria-pressed"));
+
+  test("the controller answers a count query with the number of Mermaid Blocks on the page", async () => {
+    const mounted = await mountPage(THREE);
+
+    expect(answerPopup(mounted, { type: GET_BLOCK_COUNT })).toEqual({ count: 3 });
+  });
+
+  test("the count follows blocks added after mount", async () => {
+    const mounted = await mountPage(MARKED);
+
+    document.body.insertAdjacentHTML("beforeend", "<pre>graph TD; late</pre>");
+
+    await waitFor(() => expect(answerPopup(mounted, { type: GET_BLOCK_COUNT })).toEqual({ count: 2 }));
+  });
+
+  test("Render all switches every block to Diagram View", async () => {
+    const renderer = fakeRenderer();
+    const mounted = await mountPage(THREE, { renderer });
+
+    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" })).toEqual({ count: 3 });
+
+    expect(pressed()).toEqual(["true", "true", "true"]);
+    await waitFor(() => expect([diagram(0), diagram(1), diagram(2)].every(Boolean)).toBe(true));
+    expect(renderer.calls).toEqual(["graph TD; A-->B", "graph TD; sniffed", "graph TD; fence"]);
+  });
+
+  test("Render all leaves blocks already in Diagram View alone", async () => {
+    const renderer = fakeRenderer();
+    const mounted = await mountPage(THREE, { renderer });
+    toggles()[1].click();
+    await waitFor(() => expect(diagram(1)).not.toBeNull());
+
+    answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" });
+
+    await waitFor(() => expect(renderer.calls).toHaveLength(3));
+    expect(pressed()).toEqual(["true", "true", "true"]);
+  });
+
+  test("Show all code switches every block back to Code View, restoring the page exactly", async () => {
+    const mounted = await mountPage(THREE);
+    const before = document.body.innerHTML;
+    answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" });
+    await waitFor(() => expect(diagram(2)).not.toBeNull());
+
+    answerPopup(mounted, { type: SET_ALL_VIEWS, view: "code" });
+
+    expect(pressed()).toEqual(["false", "false", "false"]);
+    expect([diagram(0), diagram(1), diagram(2)]).toEqual([null, null, null]);
+    expect(document.body.innerHTML).toBe(before);
+  });
+
+  test("a Disabled Site answers with no blocks, and Bulk Actions do nothing", async () => {
+    const renderer = fakeRenderer();
+    const mounted = await mountPage(THREE, { renderer, settings: fakeSettings({ disabled: true }) });
+
+    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" })).toEqual({ count: 0 });
+    expect(renderer.calls).toEqual([]);
+  });
+
+  test("messages that aren't the popup's get no answer", async () => {
+    const mounted = await mountPage(MARKED);
+
+    expect(answerPopup(mounted, { type: "something-else" })).toBeUndefined();
+    expect(answerPopup(mounted, null)).toBeUndefined();
+    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "sideways" })).toBeUndefined();
   });
 });

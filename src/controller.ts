@@ -12,10 +12,20 @@ export interface Ports {
   settings: Settings;
 }
 
+/** A block's Block View: its Diagram, or the page's original code. */
+export type BlockView = "diagram" | "code";
+
 export interface Mounted {
+  /** How many Mermaid Blocks the page has right now. */
+  blockCount(): number;
+  /** A Bulk Action: switches every block to `view`, leaving blocks already there alone. */
+  setAllViews(view: BlockView): void;
   /** Stops watching the page and puts every block back as the page had it. */
   unmount(): void;
 }
+
+/** What mounting gives on a Disabled Site: no blocks, and nothing to do. */
+const NOTHING_MOUNTED: Mounted = { blockCount: () => 0, setAllViews() {}, unmount() {} };
 
 /** Page changes are gathered for this long before the page is scanned again, so a stream of changes causes few rescans and redraws. */
 export const RESCAN_DELAY_MS = 150;
@@ -29,7 +39,7 @@ export const ERROR_SETTLE_MS = 1000;
  * blocks that are removed, stop being Mermaid or end up in an Editing Surface lose their toggle.
  */
 export async function mount(doc: Document, { renderer, settings }: Ports): Promise<Mounted> {
-  if (await settings.isSiteDisabled(doc.location.hostname)) return { unmount() {} };
+  if (await settings.isSiteDisabled(doc.location.hostname)) return NOTHING_MOUNTED;
   // Keyed by the block's first element, which stays the same while a block's source changes.
   const attached = new Map<Element, AttachedBlock>();
 
@@ -91,6 +101,10 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
   });
 
   return {
+    blockCount: () => attached.size,
+    setAllViews(view) {
+      for (const block of attached.values()) block.setView(view);
+    },
     unmount() {
       observer.disconnect();
       clearTimeout(timer);
@@ -122,6 +136,8 @@ interface AttachedBlock {
   readonly host: Element;
   /** Takes the block as it's now found on the page, redrawing it if it's in Diagram View and its source changed. */
   update(block: MermaidBlock): void;
+  /** Switches the block to `view`, as its Render Toggle does; nothing happens if it's already there. */
+  setView(view: BlockView): void;
   /** Puts the block back in Code View and removes everything the extension inserted for it. */
   detach(): void;
 }
@@ -250,13 +266,15 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
     else showError();
   };
 
-  toggle.addEventListener("click", () => {
-    showingDiagram = !showingDiagram;
+  const setView = (view: BlockView) => {
+    if (showingDiagram === (view === "diagram")) return;
+    showingDiagram = view === "diagram";
     setPressed(showingDiagram);
     if (!showingDiagram) return showCode();
     hideCode();
     void draw();
-  });
+  };
+  toggle.addEventListener("click", () => setView(showingDiagram ? "code" : "diagram"));
 
   const hover = (on: boolean) => () => {
     // Line the toggle up with the block's top edge, wherever margin collapsing has put the host.
@@ -279,6 +297,7 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
 
   return {
     host,
+    setView,
     update(next) {
       // The page may have removed or moved the host (say, a framework re-rendering the parent).
       if (host.nextElementSibling !== next.elements[0]) next.elements[0].before(host);

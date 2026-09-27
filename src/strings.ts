@@ -14,4 +14,13 @@ export const strings = {
   viewerLabel: "Diagram viewer",
   fitToWindow: "Fit to window",
   closeViewer: "Close",
+  popupTitle: "Mermaid Render",
+  noBlocks: "No Mermaid blocks on this page.",
+  oneBlock: "1 Mermaid block on this page.",
+  /** "{count}" is replaced with the number of blocks. */
+  manyBlocks: "{count} Mermaid blocks on this page.",
+  renderAll: "Render all",
+  showAllCode: "Show all code",
+  restrictedPage: "Mermaid Render can't run on this page. Browser pages and add-on stores are off limits to extensions.",
+  reloadPage: "Mermaid Render isn't running on this page yet. Reload the page to use it.",
 } as const;

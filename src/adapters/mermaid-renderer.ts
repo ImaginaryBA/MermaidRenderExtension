@@ -16,7 +16,8 @@ export function mermaidRenderer(): Renderer {
     async render(source, options) {
       try {
         loading ??= browser.runtime.sendMessage({ type: LOAD_MERMAID });
-        await loading;
+        const reply = (await loading) as { error?: string } | undefined;
+        if (reply?.error) throw new Error(reply.error);
       } catch (error) {
         loading = undefined;
         return { ok: false, message: `Mermaid failed to load: ${String(error)}` };

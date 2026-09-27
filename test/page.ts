@@ -37,10 +37,11 @@ let mounted: Mounted | undefined;
 export async function mountPage(
   html: string,
   { renderer = fakeRenderer(), settings = fakeSettings() } = {},
-): Promise<void> {
+): Promise<Mounted> {
   mounted?.unmount();
   document.body.innerHTML = html;
   mounted = await mount(document, { renderer, settings });
+  return mounted;
 }
 
 /** Every Render Toggle on the page, in document order. */
