@@ -27,7 +27,7 @@ const elkUsesSandboxGlobal = {
 
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist");
-await build({ ...common, entryPoints: { content: "src/content.ts", background: "src/background.ts" } });
+await build({ ...common, entryPoints: { content: "src/content.ts", background: "src/background.ts", popup: "src/popup.ts" } });
 // Mermaid is several megabytes, so only its bundle is minified; our own scripts stay readable.
 // Lodash finds the global object via `global`, then `self`, then `Function("return this")()`.
 // In a Firefox content script `self` is an Xray of the page window, so that check fails and the
@@ -41,3 +41,4 @@ await build({
   plugins: [elkUsesSandboxGlobal],
 });
 await copyFile("src/manifest.json", "dist/manifest.json");
+await copyFile("src/popup.html", "dist/popup.html");
