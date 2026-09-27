@@ -1,6 +1,6 @@
 # Handoff: Mermaid Render Extension
 
-Written at the end of a cloud session, for continuing locally, starting with the first real test in Firefox. It links to the spec, tickets, glossary and ADRs rather than repeating them.
+Written at the end of a cloud session, for continuing locally, starting with the first real test in Firefox. It links to the spec, tickets, glossary and ADRs rather than repeating them. For installing, developing and releasing, see the [README](../README.md); before a release, run the [manual test checklist](manual-test-checklist.md).
 
 ## Where things stand
 
@@ -36,7 +36,7 @@ If the page shows **no toggles at all**:
 **Firefox-specific risks, if something fails:**
 - **"Mermaid failed to load."** means the background script injected `mermaid.js`, but the content script can't see the global it sets (`globalThis.mermaidRenderExtension`). The code assumes `scripting.executeScript` runs in the same isolated world as the content script. See `src/adapters/mermaid-renderer.ts`, `src/background.ts` and `src/mermaid-bundle.ts`.
 - **Nothing happens on click:** check the add-on console for errors from `runtime.onMessage`. The background script returns a Promise from the listener, the Firefox style. That is fine in Firefox, but the Chrome port will need to change it.
-- **`web-ext lint` errors:** `ADDON_ID_REQUIRED` and `FILE_TOO_LARGE` (the 5.3 MB `mermaid.js`) are known and belong to #11. See the comment on #11. They don't stop `web-ext run`.
+- **`web-ext lint`:** clean since #11 (the add-on ID is set, and ELK is split into `elk.js` so no file is over 5 MB). `npm run check` runs it.
 
 ## Then
 

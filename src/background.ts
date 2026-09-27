@@ -5,7 +5,7 @@ browser.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =
   const tabId = sender.tab?.id;
   if ((message as { type?: unknown })?.type !== LOAD_MERMAID || tabId === undefined) return false;
   browser.scripting
-    .executeScript({ target: { tabId, frameIds: [sender.frameId ?? 0] }, files: ["mermaid.js"] })
+    .executeScript({ target: { tabId, frameIds: [sender.frameId ?? 0] }, files: ["elk.js", "mermaid.js"] })
     .then(
       () => sendResponse(true satisfies LoadMermaidReply),
       (error: unknown) => sendResponse({ error: String(error) } satisfies LoadMermaidReply),
