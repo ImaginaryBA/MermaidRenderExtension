@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { HOST_TAG, mount } from "../src/controller";
+import { HOST_TAG, mount, RESCAN_DELAY_MS, type Mounted } from "../src/controller";
 import type { Renderer, RenderResult, Settings } from "../src/ports";
 
 export interface FakeRenderer extends Renderer {
@@ -24,12 +24,16 @@ export function fakeSettings({ disabled = false } = {}): Settings {
   return { isSiteDisabled: async () => disabled };
 }
 
+/** The page mounted by the previous test, which keeps watching the shared document until unmounted. */
+let mounted: Mounted | undefined;
+
 export async function mountPage(
   html: string,
   { renderer = fakeRenderer(), settings = fakeSettings() } = {},
 ): Promise<void> {
+  mounted?.unmount();
   document.body.innerHTML = html;
-  await mount(document, { renderer, settings });
+  mounted = await mount(document, { renderer, settings });
 }
 
 /** Every Render Toggle on the page, in document order. */
@@ -59,10 +63,15 @@ export function isHidden(el: Element): boolean {
   return getComputedStyle(el).display === "none";
 }
 
-export function waitFor(assertion: () => void): Promise<void> {
-  return vi.waitFor(assertion, { timeout: 1000, interval: 5 });
+export function waitFor(assertion: () => void, timeout = 1000): Promise<void> {
+  return vi.waitFor(assertion, { timeout, interval: 5 });
 }
 
-function hosts(): Element[] {
+/** Waits long enough for the controller to have reacted to any page changes, for checks that nothing happened. */
+export function settle(): Promise<void> {
+  return new Promise((done) => setTimeout(done, RESCAN_DELAY_MS * 3));
+}
+
+export function hosts(): Element[] {
   return [...document.querySelectorAll(HOST_TAG)];
 }

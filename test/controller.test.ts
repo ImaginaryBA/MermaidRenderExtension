@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { HOST_TAG } from "../src/controller";
+import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
-import { diagram, renderError, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
+import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
 
@@ -277,5 +277,168 @@ describe("Editing Surfaces", () => {
     expect(toggles()[0].getRootNode()).toBe(
       document.getElementById("other")!.previousElementSibling!.shadowRoot,
     );
+  });
+});
+
+describe("Dynamic pages", () => {
+  const code = (id = "code") => document.getElementById(id)!.querySelector("code")!;
+
+  test("a block added after mount gets exactly one toggle", async () => {
+    await mountPage(`<p>Intro</p>`);
+
+    document.body.insertAdjacentHTML("beforeend", MARKED.replace('id="code"', 'id="late"'));
+
+    await waitFor(() => expect(toggles()).toHaveLength(1));
+    await settle();
+    expect(hosts()).toHaveLength(1);
+  });
+
+  test("the extension's own insertions never add toggles or trigger renders", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+    toggles()[0].click();
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+    await settle();
+
+    expect(hosts()).toHaveLength(1);
+    expect(renderer.calls).toHaveLength(2);
+  });
+
+  test("a block in Diagram View redraws when its source changes", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->B"));
+
+    code().textContent = "graph TD; A-->C";
+
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->C"));
+    expect(renderer.calls).toEqual(["graph TD; A-->B", "graph TD; A-->C"]);
+  });
+
+  test("a stream of source changes causes a bounded number of redraws, ending with the final source", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+
+    let source = "graph TD; A-->B";
+    for (let i = 0; i < 30; i++) {
+      source += `; N${i}-->A`;
+      code().textContent = source;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+
+    await waitFor(() => expect(diagram()?.textContent).toBe(source));
+    await settle();
+    expect(renderer.calls.length).toBeLessThanOrEqual(6);
+    expect(renderer.calls.at(-1)).toBe(source);
+  });
+
+  test("a block in Code View whose source changes is not redrawn until the toggle is flipped", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+
+    code().textContent = "graph TD; A-->C";
+    await settle();
+    expect(renderer.calls).toEqual([]);
+
+    toggles()[0].click();
+    await waitFor(() => expect(renderer.calls).toEqual(["graph TD; A-->C"]));
+  });
+
+  test("removing a block removes the toggle and diagram inserted for it", async () => {
+    await mountPage(MARKED);
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+
+    document.getElementById("code")!.remove();
+
+    await waitFor(() => expect(hosts()).toEqual([]));
+  });
+
+  test("a block whose content stops being Mermaid returns to Code View and loses its toggle", async () => {
+    await mountPage(MARKED);
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+
+    code().className = "language-js";
+
+    await waitFor(() => expect(hosts()).toEqual([]));
+    expect(isHidden(document.getElementById("code")!)).toBe(false);
+  });
+
+  test("a partial Text Fence becomes a block when its closing line arrives", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(`<div id="chat"><p>\`\`\`mermaid</p><p>graph TD; A-->B</p></div>`, { renderer });
+    expect(toggles()).toEqual([]);
+
+    document.getElementById("chat")!.insertAdjacentHTML("beforeend", "<p>```</p>");
+
+    await waitFor(() => expect(toggles()).toHaveLength(1));
+    toggles()[0].click();
+    await waitFor(() => expect(renderer.calls).toEqual(["graph TD; A-->B"]));
+  });
+
+  test("a block gets its toggle back when its region stops being editable", async () => {
+    await mountPage(`<div id="region" contenteditable="true">${MARKED}</div>`);
+    expect(toggles()).toEqual([]);
+
+    document.getElementById("region")!.removeAttribute("contenteditable");
+
+    await waitFor(() => expect(toggles()).toHaveLength(1));
+  });
+});
+
+describe("Dynamic pages: the page removing the extension's elements", () => {
+  test("a block whose toggle the page removed gets it back, still showing its Diagram", async () => {
+    await mountPage(MARKED);
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->B"));
+
+    hosts()[0].remove();
+
+    await waitFor(() => expect(toggles()).toHaveLength(1));
+    expect(diagram()?.textContent).toBe("graph TD; A-->B");
+    expect(document.getElementById("code")!.previousElementSibling).toBe(hosts()[0]);
+  });
+});
+
+describe("Dynamic pages: redrawing while the source changes", () => {
+  /** Fails like Mermaid does on a source cut off mid-arrow. */
+  const failWhenCutOff = () =>
+    fakeRenderer((source) =>
+      /-->s*$/.test(source) ? { ok: false, message: "Parse error" } : { ok: true, svg: `<svg><text>${source}</text></svg>` },
+    );
+  const code = () => document.getElementById("code")!.querySelector("code")!;
+
+  test("a redraw that fails while the source is still changing keeps the last good Diagram", async () => {
+    await mountPage(MARKED, { renderer: failWhenCutOff() });
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->B"));
+
+    code().textContent = "graph TD; A-->B; B-->";
+    await settle();
+    expect(renderError()).toBeNull();
+    expect(diagram()?.textContent).toBe("graph TD; A-->B");
+
+    code().textContent = "graph TD; A-->B; B-->C";
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->B; B-->C"));
+    expect(renderError()).toBeNull();
+  });
+
+  test("a source that stays invalid shows its Render Error once it stops changing", async () => {
+    await mountPage(MARKED, { renderer: failWhenCutOff() });
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+
+    code().textContent = "graph TD; A-->B; B-->";
+
+    await waitFor(() => expect(renderError()?.detail).toBe("Parse error"), ERROR_SETTLE_MS + 1000);
+    expect(diagram()).toBeNull();
   });
 });
