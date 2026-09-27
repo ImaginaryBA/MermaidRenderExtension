@@ -328,3 +328,46 @@ describe("Text Fences", () => {
     expect(findMermaidBlocks(root).map((b) => b.kind)).toEqual(["text-fence", "marked", "sniffed"]);
   });
 });
+
+describe("Editing Surfaces", () => {
+  const BLOCKS = {
+    marked: `<pre><code class="language-mermaid">graph TD; marked</code></pre>`,
+    sniffed: `<pre>graph TD; sniffed</pre>`,
+    "text-fence": `<p>\`\`\`mermaid</p><p>graph TD; fence</p><p>\`\`\`</p>`,
+  };
+
+  test.each(Object.entries(BLOCKS))("a %s block outside any Editing Surface is detected", (kind, html) => {
+    expect(findMermaidBlocks(page(`<div>${html}</div>`)).map((b) => b.kind)).toEqual([kind]);
+  });
+
+  test.each(
+    Object.entries(BLOCKS).flatMap(([kind, html]) => [
+      [kind, "contenteditable=true", `<div contenteditable="true">${html}</div>`],
+      [kind, "bare contenteditable", `<div contenteditable>${html}</div>`],
+      [kind, "contenteditable=plaintext-only", `<div contenteditable="plaintext-only">${html}</div>`],
+      [kind, "an editable ancestor", `<div contenteditable="true"><section><div>${html}</div></section></div>`],
+      [kind, "a contenteditable=false island in an editable region", `<div contenteditable="true"><div contenteditable="false">${html}</div></div>`],
+    ]),
+  )("a %s block inside %s is not detected", (_kind, _where, html) => {
+    expect(findMermaidBlocks(page(html))).toEqual([]);
+  });
+
+  test("a block inside a contenteditable=false region with no editable ancestor is detected", () => {
+    expect(findMermaidBlocks(page(`<div contenteditable="false">${BLOCKS.marked}</div>`))).toHaveLength(1);
+  });
+
+  test("Mermaid inside a <textarea> is not detected", () => {
+    const root = page(`<textarea>\`\`\`mermaid\ngraph TD; A-->B\n\`\`\`</textarea>
+      <textarea><pre><code class="language-mermaid">graph TD; A-->B</code></pre></textarea>`);
+
+    expect(findMermaidBlocks(root)).toEqual([]);
+  });
+
+  test("a document in design mode is one Editing Surface", () => {
+    const doc = document.implementation.createHTMLDocument();
+    doc.body.innerHTML = BLOCKS.marked + BLOCKS.sniffed + BLOCKS["text-fence"];
+    doc.designMode = "on";
+
+    expect(findMermaidBlocks(doc.body)).toEqual([]);
+  });
+});

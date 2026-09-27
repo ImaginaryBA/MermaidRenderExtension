@@ -1,4 +1,5 @@
 import { findMermaidBlocks, type MermaidBlock } from "./detector";
+import { isInEditingSurface } from "./editing-surfaces";
 import type { Renderer, RenderResult, Settings } from "./ports";
 import { strings } from "./strings";
 
@@ -10,7 +11,18 @@ export interface Ports {
 /** Finds the Mermaid Blocks on the page and gives each one a Render Toggle. */
 export async function mount(doc: Document, { renderer, settings }: Ports): Promise<void> {
   if (await settings.isSiteDisabled(doc.location.hostname)) return;
-  for (const block of findMermaidBlocks(doc.body)) attach(doc, block, renderer);
+  const attached = new Map<MermaidBlock, () => void>();
+  for (const block of findMermaidBlocks(doc.body)) attached.set(block, attach(doc, block, renderer));
+
+  // A region that becomes an Editing Surface (say, a wiki switching to edit mode) must not
+  // keep anything the extension inserted or hid, or the editor could save it.
+  new MutationObserver(() => {
+    for (const [block, detach] of attached) {
+      if (!isInEditingSurface(block.elements[0])) continue;
+      detach();
+      attached.delete(block);
+    }
+  }).observe(doc.documentElement, { subtree: true, attributes: true, attributeFilter: ["contenteditable"] });
 }
 
 export const HOST_TAG = "mermaid-render-block";
@@ -48,8 +60,11 @@ button:focus-visible { outline: 2px solid #7cb7ff; outline-offset: 2px; }
 .diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 `;
 
-/** Inserts a Render Toggle before the block; the block's own elements are only hidden and shown (ADR 0003). */
-function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
+/**
+ * Inserts a Render Toggle before the block; the block's own elements are only hidden and shown (ADR 0003).
+ * Returns a function that puts the block back in Code View and removes everything that was inserted.
+ */
+function attach(doc: Document, block: MermaidBlock, renderer: Renderer): () => void {
   const host = doc.createElement(HOST_TAG);
   const root = host.attachShadow({ mode: "open" });
   const style = doc.createElement("style");
@@ -71,16 +86,17 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
   };
   setPressed(false);
 
+  const showCode = () => {
+    diagram.replaceChildren();
+    for (const [el, style] of hidden) restoreStyle(el, style);
+    hidden.clear();
+  };
+
   toggle.addEventListener("click", async () => {
     showingDiagram = !showingDiagram;
     const current = ++generation;
     setPressed(showingDiagram);
-    if (!showingDiagram) {
-      diagram.replaceChildren();
-      for (const [el, style] of hidden) restoreStyle(el, style);
-      hidden.clear();
-      return;
-    }
+    if (!showingDiagram) return showCode();
     for (const el of block.elements) {
       hidden.set(el, el.getAttribute("style"));
       (el as HTMLElement).style.setProperty("display", "none", "important");
@@ -102,10 +118,23 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): void {
     }
     host.toggleAttribute("data-hover", on);
   };
+  const hoverOn = hover(true);
+  const hoverOff = hover(false);
   for (const el of [host, ...block.elements]) {
-    el.addEventListener("mouseenter", hover(true));
-    el.addEventListener("mouseleave", hover(false));
+    el.addEventListener("mouseenter", hoverOn);
+    el.addEventListener("mouseleave", hoverOff);
   }
+
+  return () => {
+    // A render still in flight sees a newer generation and discards its result.
+    ++generation;
+    showCode();
+    for (const el of block.elements) {
+      el.removeEventListener("mouseenter", hoverOn);
+      el.removeEventListener("mouseleave", hoverOff);
+    }
+    host.remove();
+  };
 }
 
 function restoreStyle(el: Element, style: string | null): void {
