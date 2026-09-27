@@ -6,7 +6,7 @@ import { SET_ALL_VIEWS, type PopupMessage, type PopupReply } from "./messages";
 import { strings } from "./strings";
 import { BUTTON_STYLE, iconButton } from "./buttons";
 import { openViewer, VIEWER_TAG, type OpenViewer } from "./viewer";
-import { WORKSPACE_TAG } from "./workspace";
+import { removeRenderWorkspace, WORKSPACE_TAG } from "./workspace";
 import { inlineZoom, ZOOM_STYLE } from "./zoom";
 
 export interface Ports {
@@ -15,18 +15,15 @@ export interface Ports {
 }
 
 export interface Mounted {
-  /** Whether the page's site is a Disabled Site, so nothing was mounted. */
+  /** Whether the page's site is a Disabled Site right now, so no blocks are detected. */
   readonly siteDisabled: boolean;
   /** How many Mermaid Blocks the page has right now. */
   blockCount(): number;
   /** A Bulk Action: switches every block to `view`, leaving blocks already there alone. */
   setAllViews(view: BlockView): void;
-  /** Stops watching the page and puts every block back as the page had it. */
+  /** Stops watching the page and the settings, and puts every block back as the page had it. */
   unmount(): void;
 }
-
-/** What mounting gives on a Disabled Site: no blocks, and nothing to do. */
-const NOTHING_MOUNTED: Mounted = { siteDisabled: true, blockCount: () => 0, setAllViews() {}, unmount() {} };
 
 /** The page's answer to a message from the popup, applying any Bulk Action first. */
 export function answerPopup(mounted: Mounted, message: PopupMessage): PopupReply {
@@ -41,12 +38,63 @@ export const RESCAN_DELAY_MS = 150;
 export const ERROR_SETTLE_MS = 1000;
 
 /**
+ * Watches the page unless its site is a Disabled Site, and follows the setting as it changes: turning
+ * the site off puts every block back as the page had it, and turning it on finds them again, with no
+ * reload either way.
+ */
+export async function mount(doc: Document, { renderer, settings }: Ports): Promise<Mounted> {
+  const hostname = doc.location.hostname;
+  let watch: PageWatch | null = null;
+  let unmounted = false;
+
+  const applySetting = async () => {
+    // A setting that can't be read counts as on, the extension's normal state.
+    const disabled = await settings.isSiteDisabled(hostname).catch(() => false);
+    if (unmounted) return;
+    if (disabled && watch) {
+      watch.stop();
+      watch = null;
+    } else if (!disabled && !watch) {
+      watch = watchPage(doc, renderer);
+    }
+  };
+  // Settings are applied one at a time and in order, so a quick off-and-on can't start two watches.
+  // Listening starts before the first read, so a change made during it isn't missed.
+  let pending = Promise.resolve();
+  const stopListening = settings.onChange(() => {
+    pending = pending.then(applySetting);
+  });
+  pending = pending.then(applySetting);
+  await pending;
+
+  return {
+    get siteDisabled() {
+      return !watch;
+    },
+    blockCount: () => watch?.blockCount() ?? 0,
+    setAllViews: (view) => watch?.setAllViews(view),
+    unmount() {
+      unmounted = true;
+      stopListening();
+      watch?.stop();
+      watch = null;
+    },
+  };
+}
+
+interface PageWatch {
+  blockCount(): number;
+  setAllViews(view: BlockView): void;
+  /** Stops watching and puts every block back as the page had it. */
+  stop(): void;
+}
+
+/**
  * Finds the Mermaid Blocks on the page and gives each one a Render Toggle, then keeps watching:
  * blocks added later get a toggle, blocks in Diagram View redraw when their source changes, and
  * blocks that are removed, stop being Mermaid or end up in an Editing Surface lose their toggle.
  */
-export async function mount(doc: Document, { renderer, settings }: Ports): Promise<Mounted> {
-  if (await settings.isSiteDisabled(doc.location.hostname)) return NOTHING_MOUNTED;
+function watchPage(doc: Document, renderer: Renderer): PageWatch {
   // Keyed by the block's first element, which stays the same while a block's source changes.
   const attached = new Map<Element, AttachedBlock>();
 
@@ -108,15 +156,15 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
   });
 
   return {
-    siteDisabled: false,
     blockCount: () => attached.size,
     setAllViews(view) {
       for (const block of attached.values()) block.setView(view);
     },
-    unmount() {
+    stop() {
       observer.disconnect();
       clearTimeout(timer);
       detachWhere(() => true);
+      removeRenderWorkspace(doc);
     },
   };
 }

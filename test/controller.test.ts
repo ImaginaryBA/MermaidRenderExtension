@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { answerPopup, ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
-import type { RenderResult } from "../src/ports";
+import type { RenderResult, Settings } from "../src/ports";
 import { WORKSPACE_TAG } from "../src/workspace";
 import { GET_BLOCK_COUNT, isPopupMessage, SET_ALL_VIEWS } from "../src/messages";
 import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, viewer, viewerButton, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
@@ -225,10 +225,135 @@ describe("pages without Mermaid", () => {
 });
 
 describe("Disabled Site", () => {
+  const MARKED_AND_SNIFFED = MARKED + "<pre>graph TD; sniffed</pre>";
+
   test("gets no toggles", async () => {
     await mountPage(MARKED, { settings: fakeSettings({ disabled: true }) });
 
     expect(toggles()).toEqual([]);
+  });
+
+  test("the setting is looked up by the page's hostname", async () => {
+    const settings = fakeSettings();
+    await mountPage(MARKED, { settings });
+
+    expect(settings.asked).toEqual([location.hostname]);
+  });
+
+  test("turning the site off removes everything the extension inserted and restores the page exactly", async () => {
+    const settings = fakeSettings();
+    const renderer = fakeRenderer();
+    await mountPage(MARKED_AND_SNIFFED, { settings, renderer });
+    // The page as it was parsed, before the extension inserted anything.
+    const before = Object.assign(document.createElement("div"), { innerHTML: MARKED_AND_SNIFFED }).innerHTML;
+    toggles()[0].click();
+    await waitFor(() => expect(diagram(0)).not.toBeNull());
+    viewerButton().click();
+
+    settings.setDisabled(true);
+
+    await waitFor(() => expect(hosts()).toEqual([]));
+    expect(viewer()).toBeNull();
+    expect(document.body.innerHTML).toBe(before);
+  });
+
+  test("a disabled site stops watching the page", async () => {
+    const settings = fakeSettings();
+    await mountPage(MARKED, { settings });
+    settings.setDisabled(true);
+    await waitFor(() => expect(hosts()).toEqual([]));
+
+    document.body.insertAdjacentHTML("beforeend", "<pre>graph TD; late</pre>");
+    await settle();
+
+    expect(hosts()).toEqual([]);
+  });
+
+  test("turning the site back on finds its blocks again, without a reload", async () => {
+    const settings = fakeSettings({ disabled: true });
+    const mounted = await mountPage(MARKED_AND_SNIFFED, { settings });
+    expect(mounted.siteDisabled).toBe(true);
+
+    settings.setDisabled(false);
+
+    await waitFor(() => expect(toggles()).toHaveLength(2));
+    expect(mounted.siteDisabled).toBe(false);
+    expect(answerPopup(mounted, { type: GET_BLOCK_COUNT })).toEqual({ count: 2, siteDisabled: false });
+  });
+
+  test("a quick off-and-on leaves exactly one set of toggles", async () => {
+    const settings = fakeSettings();
+    await mountPage(MARKED_AND_SNIFFED, { settings });
+
+    settings.setDisabled(true);
+    settings.setDisabled(false);
+    settings.setDisabled(true);
+    settings.setDisabled(false);
+    await settle();
+
+    expect(toggles()).toHaveLength(2);
+  });
+
+  test("turning the site off also removes Mermaid's render workspace", async () => {
+    const settings = fakeSettings();
+    await mountPage(MARKED, { settings });
+    // The real renderer leaves its workspace under <body> once it has drawn a Diagram.
+    document.body.append(document.createElement(WORKSPACE_TAG));
+
+    settings.setDisabled(true);
+
+    await waitFor(() => expect(document.querySelector(WORKSPACE_TAG)).toBeNull());
+  });
+
+  test("a setting that can't be read counts as on, and later changes are still followed", async () => {
+    const settings = fakeSettings();
+    let failNext = true;
+    const flaky: Settings = {
+      isSiteDisabled: (hostname) => (failNext ? ((failNext = false), Promise.reject(new Error("storage unavailable"))) : settings.isSiteDisabled(hostname)),
+      onChange: (listener) => settings.onChange(listener),
+    };
+    await mountPage(MARKED, { settings: flaky });
+    expect(toggles()).toHaveLength(1);
+
+    settings.setDisabled(true);
+
+    await waitFor(() => expect(hosts()).toEqual([]));
+  });
+
+  test("a change made while the setting is first being read isn't missed", async () => {
+    const settings = fakeSettings();
+    let release!: () => void;
+    const gate = new Promise<void>((done) => (release = done));
+    let first = true;
+    const slow: Settings = {
+      async isSiteDisabled(hostname) {
+        if (first) {
+          first = false;
+          await gate;
+          return false;
+        }
+        return settings.isSiteDisabled(hostname);
+      },
+      onChange: (listener) => settings.onChange(listener),
+    };
+    const mounting = mountPage(MARKED, { settings: slow });
+
+    settings.setDisabled(true);
+    release();
+    await mounting;
+
+    await waitFor(() => expect(hosts()).toEqual([]));
+  });
+
+  test("after unmounting, a settings change doesn't bring the toggles back", async () => {
+    const settings = fakeSettings({ disabled: true });
+    const mounted = await mountPage(MARKED, { settings });
+
+    mounted.unmount();
+    settings.setDisabled(false);
+    await settle();
+
+    expect(hosts()).toEqual([]);
   });
 });
 

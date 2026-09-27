@@ -55,5 +55,5 @@ What a block in Diagram View shows in place of a Diagram when its Mermaid Source
 Any part of a page where the user is editing content, such as a wiki editor or a text box: an editable element (including a non-editable island inside one), a `<textarea>`, or a document in design mode. The extension never detects Mermaid Blocks inside one, and a block that ends up inside one after the page loads goes back to Code View and loses its Render Toggle, which comes back once the block is no longer inside one.
 
 **Disabled Site**:
-A site on which the user has turned the extension off; no Mermaid Blocks are detected there.
+A site on which the user has turned the extension off; no Mermaid Blocks are detected there. A site is a hostname: `www.example.com` and `example.com` are separate sites, and every port of a host shares one setting. Local `file:` pages have no hostname, so they can't be turned off.
 _Avoid_: blocked site, excluded site

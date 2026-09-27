@@ -28,4 +28,8 @@ export const strings = {
   restrictedPage: "Mermaid Render can't run on this page. Browser pages and add-on stores are off limits to extensions, and the extension may not be allowed on this site.",
   notRunningHere: "Mermaid Render isn't running on this page. If the page is still loading, or was open before the extension was installed or updated, reload it.",
   siteDisabled: "Mermaid Render is turned off for this site.",
+  /** "{site}" is replaced with the site's hostname. */
+  runOnSite: "Run Mermaid Render on {site}",
+  needsAccess: "Mermaid Render needs permission to read the pages you visit, so it can find Mermaid code on them.",
+  grantAccess: "Allow on all websites",
 } as const;
