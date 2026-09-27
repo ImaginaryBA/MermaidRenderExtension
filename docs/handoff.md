@@ -1,6 +1,6 @@
 # Handoff: Mermaid Render Extension
 
-Written at the end of a cloud session, for continuing locally, starting with the first real test in Firefox. It links to the spec, tickets, glossary and ADRs rather than repeating them.
+Written at the end of a cloud session, for continuing locally, starting with the first real test in Firefox. It links to the spec, tickets, glossary and ADRs rather than repeating them. For installing, developing and releasing, see the [README](../README.md); before a release, run the [manual test checklist](manual-test-checklist.md).
 
 ## Where things stand
 
@@ -15,15 +15,15 @@ Written at the end of a cloud session, for continuing locally, starting with the
 
 ```sh
 npm ci
-npm run check   # typecheck + 109 tests + build
+npm run check   # typecheck, tests, build and web-ext lint
 npm start       # builds, serves the repo over HTTP, then web-ext opens Firefox on test-pages/mermaid-blocks.html
 ```
 
 If the page shows **no toggles at all**:
-1. **Site access:** the extension may not have been granted access to all sites. Firefox MV3 treats host permissions as optional. Open `about:addons` → Mermaid Render → Permissions and allow access to all websites. Handling this properly in the popup is #13.
+1. **Site access:** the extension may not have been granted access to all sites. Since #13 the popup offers a one-click request; you can also allow it in `about:addons` → Mermaid Render → Permissions.
 2. **`file://` URLs:** content scripts may not run on local files, so `npm start` (`scripts/start.mjs`) serves the page over HTTP on a free port instead. If you open a test page by hand, use that `http://localhost:<port>/…` address.
 
-**What to check on the test page:**
+**What to check:** the [manual test checklist](manual-test-checklist.md) now covers this and every later feature. The original first-run list follows.
 - [ ] Hovering over a block shows a "Show diagram" button in its top-right corner. Tab reaches it, and Enter or Space activates it.
 - [ ] **Marked Blocks** (the flowchart and sequence diagram) draw, and "Show code" restores the original block exactly.
 - [ ] The **invalid block** shows "Could not render this diagram." with Mermaid's line-numbered message under **Details**.
@@ -34,15 +34,15 @@ If the page shows **no toggles at all**:
 - [ ] Mermaid loads only on the first click. In the page's Developer Tools → Debugger, the extension's scripts are listed under a `moz-extension://` source. `mermaid.js` should appear there only after the first "Show diagram".
 
 **Firefox-specific risks, if something fails:**
-- **"Mermaid failed to load."** means the background script injected `mermaid.js`, but the content script can't see the global it sets (`globalThis.mermaidRenderExtension`). The code assumes `scripting.executeScript` runs in the same isolated world as the content script. See `src/adapters/mermaid-renderer.ts`, `src/background.ts` and `src/mermaid-bundle.ts`.
-- **Nothing happens on click:** check the add-on console for errors from `runtime.onMessage`. The background script returns a Promise from the listener, the Firefox style. That is fine in Firefox, but the Chrome port will need to change it.
-- **`web-ext lint` errors:** `ADDON_ID_REQUIRED` and `FILE_TOO_LARGE` (the 5.3 MB `mermaid.js`) are known and belong to #11. See the comment on #11. They don't stop `web-ext run`.
+- **"Mermaid failed to load."** means the background script injected `elk.js` and `mermaid.js`, but the content script can't see the global the Mermaid bundle sets (`globalThis.mermaidRenderExtension`). The code assumes `scripting.executeScript` runs in the same isolated world as the content script. See `src/adapters/mermaid-renderer.ts`, `src/background.ts` and `src/mermaid-bundle.ts`.
+- **Nothing happens on click:** check the add-on console for errors from `runtime.onMessage`. Since #10 both listeners answer with `sendResponse` and `return true`, which Chrome also supports.
+- **`web-ext lint`:** no errors since #11 (the add-on ID is set, and ELK is split into `elk.js` so no file is over 5 MB). `npm run check` runs it. The remaining warnings are expected: see the #11 PR.
 
 ## Then
 
 1. **Report the Firefox results.** Fix anything broken before starting new tickets, because everything else builds on this wiring.
 2. **Gather the Confluence Data Center samples #14 asks for:** the version number, and a saved HTML page containing a code macro, paragraph fences, and a fence in a table or panel. Read the comment on #14 first. It lists what to look for, including the syntax-highlighter risk.
-3. **Pick up the ready tickets.** #8 (dynamic pages) and #7 (Editing Surfaces) matter most for Confluence. #11 unblocks signing.
+3. **Pick up the ready tickets.** #8 (dynamic pages) and #7 (Editing Surfaces) matter most for Confluence. #11 unblocks signing. (Since done: #7–#13. Still open: #14, waiting on samples, and #22.)
 
 ## How the work has been done
 
