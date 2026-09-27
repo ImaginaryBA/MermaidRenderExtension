@@ -17,8 +17,18 @@ export const ZOOM_STYLE = `
     linear-gradient(#fff, #fff) center / 1.5px 8px no-repeat;
 }
 .zoom-out::before { background: linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat; }
-/* Fit: a ring around a small square, "fit to the frame". */
-.zoom-fit::before { background: linear-gradient(#fff, #fff) center / 6px 6px no-repeat; }
+/* Fit: four corner brackets, the usual "fit to frame" symbol. Positions are within the ring's 15px inner box. */
+.zoom-fit::before {
+  background:
+    linear-gradient(#fff, #fff) 3.5px 3.5px / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) 3.5px 3.5px / 1.5px 3px no-repeat,
+    linear-gradient(#fff, #fff) 8.5px 3.5px / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) 10px 3.5px / 1.5px 3px no-repeat,
+    linear-gradient(#fff, #fff) 3.5px 10px / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) 3.5px 8.5px / 1.5px 3px no-repeat,
+    linear-gradient(#fff, #fff) 8.5px 10px / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) 10px 8.5px / 1.5px 3px no-repeat;
+}
 .zoom[aria-disabled="true"] { cursor: default; filter: saturate(0.4); }
 .zoomed { cursor: grab; touch-action: none; user-select: none; }
 .zoomed:active { cursor: grabbing; }
