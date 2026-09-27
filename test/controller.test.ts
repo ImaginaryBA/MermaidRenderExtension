@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "vitest";
 import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
 import { WORKSPACE_TAG } from "../src/workspace";
-import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
+import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, viewer, viewerButton, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
+import { strings } from "../src/strings";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
 
@@ -625,5 +626,197 @@ describe("Mermaid's render workspace", () => {
     await settle();
 
     expect(toggles()).toHaveLength(1);
+  });
+});
+
+describe("Diagram Viewer", () => {
+  const showDiagram = async (n = 0) => {
+    toggles()[n].click();
+    await waitFor(() => expect(diagram(n)).not.toBeNull());
+  };
+  const press = (target: EventTarget, key: string, shiftKey = false) => {
+    const event = new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true, composed: true });
+    target.dispatchEvent(event);
+    return event;
+  };
+  afterEach(() => viewer()?.close.click());
+
+  test("the open button is a labelled button, shown only while a Diagram is", async () => {
+    await mountPage(MARKED);
+    expect(viewerButton().hidden).toBe(true);
+
+    await showDiagram();
+
+    expect(viewerButton().tagName).toBe("BUTTON");
+    expect(viewerButton().hidden).toBe(false);
+  });
+
+  test("the open button shows the block's Diagram in a full-screen overlay, without drawing it again", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+    await showDiagram();
+
+    viewerButton().click();
+
+    expect(viewer()).not.toBeNull();
+    expect(viewer()!.dialog.getAttribute("aria-modal")).toBe("true");
+    expect(viewer()!.svg?.textContent).toBe("graph TD; A-->B");
+    expect(renderer.calls).toHaveLength(1);
+    // The inline Diagram stays where it was.
+    expect(diagram()?.textContent).toBe("graph TD; A-->B");
+  });
+
+  test("Esc closes the viewer", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    press(viewer()!.dialog, "Escape");
+
+    expect(viewer()).toBeNull();
+  });
+
+  test("the close button closes the viewer", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    viewer()!.close.click();
+
+    expect(viewer()).toBeNull();
+  });
+
+  test("focus moves into the viewer on open and back to the open button on close", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().focus();
+
+    viewerButton().click();
+    expect(viewer()!.root.activeElement).toBe(viewer()!.dialog);
+
+    press(viewer()!.dialog, "Escape");
+    expect(hosts()[0].shadowRoot!.activeElement).toBe(viewerButton());
+  });
+
+  test("Tab and Shift+Tab keep focus inside the viewer", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+    const v = viewer()!;
+    const focusable = [...v.root.querySelectorAll<HTMLElement>("button, [tabindex='0']")];
+
+    focusable.at(-1)!.focus();
+    const forward = press(v.dialog, "Tab");
+    expect(forward.defaultPrevented).toBe(true);
+    expect(v.root.activeElement).toBe(focusable[0]);
+
+    const back = press(v.dialog, "Tab", true);
+    expect(back.defaultPrevented).toBe(true);
+    expect(v.root.activeElement).toBe(focusable.at(-1));
+  });
+
+  test("only one viewer is open at a time", async () => {
+    await mountPage(MARKED + MARKED.replace('id="code"', 'id="second"').replace("A-->B", "C-->D"));
+    await showDiagram(0);
+    await showDiagram(1);
+
+    viewerButton(0).click();
+    viewerButton(1).click();
+
+    expect(viewer()!.count).toBe(1);
+    expect(viewer()!.svg?.textContent).toBe("graph TD; C-->D");
+  });
+
+  test("a plain wheel over the viewer zooms and is kept from scrolling the page", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+    const v = viewer()!;
+    const fitted = v.scale();
+
+    const wheel = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true, composed: true });
+    v.svg!.dispatchEvent(wheel);
+
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(v.scale()).toBeGreaterThan(fitted);
+    v.fit.click();
+    expect(v.scale()).toBe(fitted);
+  });
+
+  test("the viewer's labels come from the strings module", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+    const v = viewer()!;
+
+    const labels = new Set<string>(Object.values(strings));
+    expect(v.dialog.getAttribute("aria-label")).toBe(strings.viewerLabel);
+    for (const button of v.root.querySelectorAll("button")) {
+      expect(labels.has(button.getAttribute("aria-label")!)).toBe(true);
+      expect(button.title).toBe(button.getAttribute("aria-label"));
+    }
+  });
+});
+
+describe("Diagram Viewer: staying in step with its block and the page", () => {
+  const showDiagram = async () => {
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+  };
+  afterEach(() => viewer()?.close.click());
+
+  test("switching the block back to Code View closes its viewer, returning focus to the toggle", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    toggles()[0].click();
+
+    expect(viewer()).toBeNull();
+    expect(hosts()[0].shadowRoot!.activeElement).toBe(toggles()[0]);
+  });
+
+  test("removing the block closes its viewer", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    document.getElementById("code")!.remove();
+
+    await waitFor(() => expect(viewer()).toBeNull());
+  });
+
+  test("unmounting closes the viewer", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    await mountPage("<p>Another page</p>");
+
+    expect(viewer()).toBeNull();
+  });
+
+  test.each([
+    ["over the toolbar", (v: NonNullable<ReturnType<typeof viewer>>) => v.close, { deltaY: 100 }],
+    ["sideways over the Diagram", (v: NonNullable<ReturnType<typeof viewer>>) => v.svg!, { deltaX: 100 }],
+  ])("a wheel %s never reaches the page", async (_where, target, delta) => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    const wheel = new WheelEvent("wheel", { ...delta, bubbles: true, cancelable: true, composed: true });
+    target(viewer()!).dispatchEvent(wheel);
+
+    expect(wheel.defaultPrevented).toBe(true);
+  });
+
+  test("the overlay element protects itself from page CSS with inline styles", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    const host = viewer()!.root.host as HTMLElement;
+    expect(host.style.getPropertyPriority("display")).toBe("important");
+    expect(host.style.getPropertyValue("display")).toBe("block");
   });
 });
