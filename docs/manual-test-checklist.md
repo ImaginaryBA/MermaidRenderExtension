@@ -8,7 +8,7 @@ Covers what the automated tests can't: real drawing by Mermaid, how things look,
 
 - [ ] Hovering over a block shows the "Show diagram" toggle in its top-right corner. Tab reaches it, and Enter or Space flips it.
 - [ ] The Marked Blocks (the flowchart and the sequence diagram) draw. "Show code" brings back the original block exactly.
-- [ ] The invalid block shows "Could not render this diagram." with Mermaid's message under **Details**.
+- [ ] The invalid block shows a Render Error: "Could not render this diagram.", with Mermaid's message under **Details**.
 - [ ] The curly-quote block draws after Source Repair. The invalid, repaired block's error says spaces or quotes were fixed.
 - [ ] The Sniffed Block (`stateDiagram-v2` in an unlabelled `<pre>`) draws. The Graphviz block has no toggle.
 - [ ] The paragraph Text Fence shows its toggle when you hover over any of its lines, and Diagram View hides every line. The `<br>` Text Fence draws, and the Python fence has no toggle.
@@ -42,7 +42,8 @@ This page's own CSS hides every `svg`, turns buttons pink and puts red dotted bo
 - [ ] On an `about:` page, the popup explains the extension can't run there.
 - [ ] With `mermaid-blocks.html` open in two tabs, turning the site off in the popup removes every toggle and Diagram in both tabs at once. Turning it back on brings them back, without a reload.
 - [ ] **Installed build:** a turned-off site stays off after restarting Firefox.
-- [ ] **Installed build, fresh install** (or revoke access in `about:addons` → Mermaid Render → Permissions): the popup asks for access, and **Allow on all websites** shows Firefox's prompt. After granting, reopen the popup. A page that was already open may need a reload, and the popup says so.
+- [ ] **Installed build, fresh install:** Firefox's install prompt asks for access to all websites, and after accepting, the extension works on newly loaded pages.
+- [ ] **Installed build, access revoked** (`about:addons` → Mermaid Render → Permissions, turn off access to all websites): the popup asks for access, and **Allow on all websites** shows Firefox's prompt. After granting, reopen the popup. A page that was already open may need a reload, and the popup says so.
 
 ## Real sites
 

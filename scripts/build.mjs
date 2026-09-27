@@ -1,5 +1,6 @@
 import { build } from "esbuild";
 import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
+import bundles from "../src/bundles.json" with { type: "json" };
 
 const common = {
   outdir: "dist",
@@ -12,9 +13,6 @@ const common = {
 
 /** AMO's linter won't parse a file over 5 MB, and a file it can't parse can't be signed. */
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
-
-/** The global the ELK bundle sets and the Mermaid bundle reads; see `elkFromGlobal`. */
-const ELK_GLOBAL = "mermaidRenderExtensionElk";
 
 // In a Firefox content script `window` is an Xray of the page window, and Xrays hide
 // function-valued properties of plain objects, so ELK's `$wnd.Math.max` is undefined.
@@ -38,7 +36,7 @@ const elkFromGlobal = {
   setup(build) {
     build.onResolve({ filter: /^elkjs(\/|$)/ }, () => ({ path: "elkjs", namespace: "elk-global" }));
     build.onLoad({ filter: /.*/, namespace: "elk-global" }, () => ({
-      contents: `module.exports = globalThis.${ELK_GLOBAL};`,
+      contents: `module.exports = globalThis.${bundles.elkGlobal};`,
       loader: "js",
     }));
   },
@@ -68,7 +66,7 @@ await build({
 await copyFile("src/manifest.json", "dist/manifest.json");
 await copyFile("src/popup.html", "dist/popup.html");
 
-for (const file of ["elk.js", "mermaid.js"]) {
+for (const file of bundles.injectedFiles) {
   const { size } = await stat(`dist/${file}`);
   if (size > MAX_FILE_BYTES) throw new Error(`dist/${file} is ${size} bytes, over AMO's ${MAX_FILE_BYTES}-byte limit`);
 }

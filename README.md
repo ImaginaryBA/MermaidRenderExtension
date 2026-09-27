@@ -1,6 +1,6 @@
 # Mermaid Render
 
-A Firefox extension that finds Mermaid code on web pages and lets you swap each block for the diagram it describes, one block at a time. It works on code blocks labelled as Mermaid, on unlabelled code that starts with a Mermaid diagram keyword, and on ```` ```mermaid ```` fences typed as plain text (as on wiki pages). Diagrams can be zoomed inline or opened full screen, and the toolbar popup can render or un-render every block on the page, or turn the extension off for a site.
+A Firefox extension that finds the Mermaid Blocks on a web page and lets you swap each one for the Diagram it describes, one block at a time. It finds code blocks labelled as Mermaid, unlabelled code that starts with a Mermaid diagram keyword, and ```` ```mermaid ```` fences typed as plain text (as on wiki pages). Diagrams can be zoomed inline or opened full screen in the Diagram Viewer. The toolbar popup can switch every block on the page at once (Render all, Show all code), or turn the extension off for a site.
 
 The words used here (Mermaid Block, Render Toggle, Diagram Viewer, Disabled Site…) are defined in [CONTEXT.md](CONTEXT.md).
 
@@ -10,7 +10,9 @@ Mermaid Render is signed by Mozilla but not listed on addons.mozilla.org, so you
 
 1. Get the signed `mermaid-render-<version>.xpi` (see [Release](#release)).
 2. In Firefox, open `about:addons`, click the gear menu, and choose **Install Add-on From File…**. Pick the `.xpi`.
-3. Click the **Mermaid Render** toolbar button. If it asks for permission to read the pages you visit, click **Allow on all websites**, then reopen the popup. Firefox treats that permission as optional, and nothing works without it. Pages that were already open may need a reload.
+3. Firefox's install prompt asks for access to your data for all websites. Accept it: the extension needs it to find Mermaid Blocks. Pages that were already open need a reload.
+
+If you later revoke that access (`about:addons` → Mermaid Render → Permissions), the toolbar popup offers **Allow on all websites** to grant it again. Firefox usually closes the popup when its prompt opens, so reopen the popup afterwards.
 
 Updates are installed the same way, over the top of the old version. Your settings are kept.
 
@@ -20,7 +22,7 @@ Needs Node.js (see `package-lock.json`) and Firefox.
 
 ```sh
 npm ci
-npm run check   # typecheck, tests, build into dist/, and web-ext lint
+npm run check   # typecheck, tests, build into dist/, and web-ext lint (which fails on errors, not warnings)
 npm start       # builds, serves the repo over HTTP, and opens Firefox with the extension loaded
 ```
 
@@ -43,7 +45,7 @@ $env:WEB_EXT_API_SECRET = "…"
 
 **Each release:**
 
-1. Bump `version` in `src/manifest.json` (and in `package.json` to match). AMO never signs the same version twice.
+1. Bump `version` in `src/manifest.json` and `package.json` to the same new version. AMO never signs the same version twice, and `npm run sign` refuses if the two differ.
 2. Run the [manual test checklist](docs/manual-test-checklist.md).
 3. Commit.
 4. Run `npm run sign`.

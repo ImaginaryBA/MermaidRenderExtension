@@ -1,0 +1,4 @@
+{
+  "elkGlobal": "mermaidRenderExtensionElk",
+  "injectedFiles": ["elk.js", "mermaid.js"]
+}
