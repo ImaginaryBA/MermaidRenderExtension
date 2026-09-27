@@ -31,6 +31,11 @@ export async function inRenderWorkspace<T>(doc: Document, draw: (container: HTML
   }
 }
 
+/** Removes the workspace, when the extension stops on a page; the next render creates it again. */
+export function removeRenderWorkspace(doc: Document): void {
+  doc.querySelector(WORKSPACE_TAG)?.remove();
+}
+
 function createWorkspace(doc: Document): Element {
   const workspace = doc.createElement(WORKSPACE_TAG);
   workspace.setAttribute("aria-hidden", "true");

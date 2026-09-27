@@ -61,7 +61,7 @@ let mounted: Mounted | undefined;
 
 export async function mountPage(
   html: string,
-  { renderer = fakeRenderer(), settings = fakeSettings() as Settings } = {},
+  { renderer = fakeRenderer(), settings = fakeSettings() }: { renderer?: Renderer; settings?: Settings } = {},
 ): Promise<Mounted> {
   mounted?.unmount();
   document.body.innerHTML = html;

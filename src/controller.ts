@@ -6,7 +6,7 @@ import { SET_ALL_VIEWS, type PopupMessage, type PopupReply } from "./messages";
 import { strings } from "./strings";
 import { BUTTON_STYLE, iconButton } from "./buttons";
 import { openViewer, VIEWER_TAG, type OpenViewer } from "./viewer";
-import { WORKSPACE_TAG } from "./workspace";
+import { removeRenderWorkspace, WORKSPACE_TAG } from "./workspace";
 import { inlineZoom, ZOOM_STYLE } from "./zoom";
 
 export interface Ports {
@@ -47,8 +47,9 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
   let watch: PageWatch | null = null;
   let unmounted = false;
 
-  const follow = async () => {
-    const disabled = await settings.isSiteDisabled(hostname);
+  const applySetting = async () => {
+    // A setting that can't be read counts as on, the extension's normal state.
+    const disabled = await settings.isSiteDisabled(hostname).catch(() => false);
     if (unmounted) return;
     if (disabled && watch) {
       watch.stop();
@@ -57,12 +58,14 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
       watch = watchPage(doc, renderer);
     }
   };
-  // Changes are followed one at a time and in order, so a quick off-and-on can't start two watches.
-  let following = follow();
-  await following;
+  // Settings are applied one at a time and in order, so a quick off-and-on can't start two watches.
+  // Listening starts before the first read, so a change made during it isn't missed.
+  let pending = Promise.resolve();
   const stopListening = settings.onChange(() => {
-    following = following.then(follow);
+    pending = pending.then(applySetting);
   });
+  pending = pending.then(applySetting);
+  await pending;
 
   return {
     get siteDisabled() {
@@ -161,6 +164,7 @@ function watchPage(doc: Document, renderer: Renderer): PageWatch {
       observer.disconnect();
       clearTimeout(timer);
       detachWhere(() => true);
+      removeRenderWorkspace(doc);
     },
   };
 }

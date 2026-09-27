@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { answerPopup, ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
-import type { RenderResult } from "../src/ports";
+import type { RenderResult, Settings } from "../src/ports";
 import { WORKSPACE_TAG } from "../src/workspace";
 import { GET_BLOCK_COUNT, isPopupMessage, SET_ALL_VIEWS } from "../src/messages";
 import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, viewer, viewerButton, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
@@ -225,7 +225,7 @@ describe("pages without Mermaid", () => {
 });
 
 describe("Disabled Site", () => {
-  const TWO = MARKED + "<pre>graph TD; sniffed</pre>";
+  const MARKED_AND_SNIFFED = MARKED + "<pre>graph TD; sniffed</pre>";
 
   test("gets no toggles", async () => {
     await mountPage(MARKED, { settings: fakeSettings({ disabled: true }) });
@@ -243,9 +243,9 @@ describe("Disabled Site", () => {
   test("turning the site off removes everything the extension inserted and restores the page exactly", async () => {
     const settings = fakeSettings();
     const renderer = fakeRenderer();
-    await mountPage(TWO, { settings, renderer });
+    await mountPage(MARKED_AND_SNIFFED, { settings, renderer });
     // The page as it was parsed, before the extension inserted anything.
-    const before = Object.assign(document.createElement("div"), { innerHTML: TWO }).innerHTML;
+    const before = Object.assign(document.createElement("div"), { innerHTML: MARKED_AND_SNIFFED }).innerHTML;
     toggles()[0].click();
     await waitFor(() => expect(diagram(0)).not.toBeNull());
     viewerButton().click();
@@ -271,7 +271,7 @@ describe("Disabled Site", () => {
 
   test("turning the site back on finds its blocks again, without a reload", async () => {
     const settings = fakeSettings({ disabled: true });
-    const mounted = await mountPage(TWO, { settings });
+    const mounted = await mountPage(MARKED_AND_SNIFFED, { settings });
     expect(mounted.siteDisabled).toBe(true);
 
     settings.setDisabled(false);
@@ -283,7 +283,7 @@ describe("Disabled Site", () => {
 
   test("a quick off-and-on leaves exactly one set of toggles", async () => {
     const settings = fakeSettings();
-    await mountPage(TWO, { settings });
+    await mountPage(MARKED_AND_SNIFFED, { settings });
 
     settings.setDisabled(true);
     settings.setDisabled(false);
@@ -292,6 +292,57 @@ describe("Disabled Site", () => {
     await settle();
 
     expect(toggles()).toHaveLength(2);
+  });
+
+  test("turning the site off also removes Mermaid's render workspace", async () => {
+    const settings = fakeSettings();
+    await mountPage(MARKED, { settings });
+    // The real renderer leaves its workspace under <body> once it has drawn a Diagram.
+    document.body.append(document.createElement(WORKSPACE_TAG));
+
+    settings.setDisabled(true);
+
+    await waitFor(() => expect(document.querySelector(WORKSPACE_TAG)).toBeNull());
+  });
+
+  test("a setting that can't be read counts as on, and later changes are still followed", async () => {
+    const settings = fakeSettings();
+    let failNext = true;
+    const flaky: Settings = {
+      isSiteDisabled: (hostname) => (failNext ? ((failNext = false), Promise.reject(new Error("storage unavailable"))) : settings.isSiteDisabled(hostname)),
+      onChange: (listener) => settings.onChange(listener),
+    };
+    await mountPage(MARKED, { settings: flaky });
+    expect(toggles()).toHaveLength(1);
+
+    settings.setDisabled(true);
+
+    await waitFor(() => expect(hosts()).toEqual([]));
+  });
+
+  test("a change made while the setting is first being read isn't missed", async () => {
+    const settings = fakeSettings();
+    let release!: () => void;
+    const gate = new Promise<void>((done) => (release = done));
+    let first = true;
+    const slow: Settings = {
+      async isSiteDisabled(hostname) {
+        if (first) {
+          first = false;
+          await gate;
+          return false;
+        }
+        return settings.isSiteDisabled(hostname);
+      },
+      onChange: (listener) => settings.onChange(listener),
+    };
+    const mounting = mountPage(MARKED, { settings: slow });
+
+    settings.setDisabled(true);
+    release();
+    await mounting;
+
+    await waitFor(() => expect(hosts()).toEqual([]));
   });
 
   test("after unmounting, a settings change doesn't bring the toggles back", async () => {

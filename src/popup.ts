@@ -1,11 +1,11 @@
-import { setSiteDisabled, storageSettings } from "./adapters/storage-settings";
+import { isSiteDisabled, setSiteDisabled } from "./adapters/storage-settings";
 import type { BlockView } from "./block-view";
 import { BUTTON_STYLE } from "./buttons";
 import { GET_BLOCK_COUNT, SET_ALL_VIEWS, type PopupMessage, type PopupReply } from "./messages";
 import { strings } from "./strings";
 
 /**
- * The toolbar popup. It first makes sure the extension may read web pages at all: Firefox treats the
+ * The toolbar popup. It first makes sure the extension may read the current page: Firefox treats the
  * all-sites host permission as optional, so it asks for it with one click when it's missing. Then it
  * shows the current site's on/off switch (a Disabled Site when off), how many Mermaid Blocks the tab
  * has, and the two Bulk Actions. It asks the tab's content script through extension messaging; where
@@ -13,6 +13,12 @@ import { strings } from "./strings";
  */
 
 const ALL_SITES = { origins: ["<all_urls>"] };
+/** After the switch changes, the tab is asked this many times, this far apart, until it has followed. */
+const FOLLOW_ATTEMPTS = 20;
+const FOLLOW_INTERVAL_MS = 50;
+
+/** Shows what the tab answered: its count and Bulk Actions, or why there are none. */
+type ShowReply = (reply: PopupReply | undefined) => void;
 
 const STYLE = `
 ${BUTTON_STYLE}
@@ -46,9 +52,11 @@ void show();
 async function show(): Promise<void> {
   const title = element("h1", strings.popupTitle);
   content.replaceChildren(title);
-  if (!(await browser.permissions.contains(ALL_SITES))) return showAccessRequest();
-
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  // The extension only sees a tab's URL if it may access that site. Without the URL, it asks for access,
+  // unless it already has it everywhere (then the tab is a browser page it can never run on).
+  if (!tab?.url && !(await browser.permissions.contains(ALL_SITES))) return showAccessRequest();
+
   const tabId = tab?.id;
   const site = siteOf(tab?.url);
   const status = element("p", "");
@@ -56,8 +64,7 @@ async function show(): Promise<void> {
   const actions = document.createElement("div");
   actions.className = "actions";
 
-  /** Shows what the page answered: its count and Bulk Actions, or why there are none. */
-  const showReply = (reply: PopupReply | undefined) => {
+  const showReply: ShowReply = (reply) => {
     actions.replaceChildren();
     if (!reply) {
       status.textContent = isWebPage(tab?.url) ? strings.notRunningHere : strings.restrictedPage;
@@ -81,7 +88,8 @@ function showAccessRequest(): void {
   const grant = element("button", strings.grantAccess);
   grant.type = "button";
   grant.className = "grant";
-  // permissions.request must run straight from the click, before anything else is awaited.
+  // permissions.request must run straight from the click, before anything else is awaited. Firefox
+  // usually closes the popup when its prompt opens, so after granting, the popup is opened again.
   grant.addEventListener("click", () => {
     void browser.permissions.request(ALL_SITES).then((granted) => {
       if (granted) void show();
@@ -91,7 +99,7 @@ function showAccessRequest(): void {
 }
 
 /** The switch that turns the extension on or off for `site`; the tab's answer after a change goes to `showReply`. */
-async function siteSwitch(site: string, tabId: number | undefined, showReply: (reply: PopupReply | undefined) => void): Promise<HTMLElement> {
+async function siteSwitch(site: string, tabId: number | undefined, showReply: ShowReply): Promise<HTMLElement> {
   const row = document.createElement("div");
   row.className = "site";
   const name = element("span", site);
@@ -100,15 +108,22 @@ async function siteSwitch(site: string, tabId: number | undefined, showReply: (r
   toggle.type = "button";
   toggle.className = "switch";
   toggle.setAttribute("role", "switch");
-  toggle.setAttribute("aria-label", strings.runOnSite.replace("{site}", site));
-  toggle.title = toggle.getAttribute("aria-label")!;
+  const label = strings.runOnSite.replace("{site}", site);
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
   const setOn = (on: boolean) => toggle.setAttribute("aria-checked", String(on));
-  setOn(!(await storageSettings().isSiteDisabled(site)));
+  setOn(!(await isSiteDisabled(site)));
 
   toggle.addEventListener("click", async () => {
     const on = toggle.getAttribute("aria-checked") !== "true";
     setOn(on);
-    await setSiteDisabled(site, !on);
+    try {
+      await setSiteDisabled(site, !on);
+    } catch {
+      // Not saved, so the switch goes back to what's really in effect.
+      setOn(!on);
+      return;
+    }
     if (tabId !== undefined) showReply(await answerOnceFollowed(tabId, !on));
   });
   row.append(name, toggle);
@@ -121,15 +136,15 @@ async function siteSwitch(site: string, tabId: number | undefined, showReply: (r
  */
 async function answerOnceFollowed(tabId: number, disabled: boolean): Promise<PopupReply | undefined> {
   let reply: PopupReply | undefined;
-  for (let attempt = 0; attempt < 20; attempt++) {
+  for (let attempt = 0; attempt < FOLLOW_ATTEMPTS; attempt++) {
     reply = await ask(tabId, { type: GET_BLOCK_COUNT });
     if (!reply || reply.siteDisabled === disabled) return reply;
-    await new Promise((done) => setTimeout(done, 50));
+    await new Promise((done) => setTimeout(done, FOLLOW_INTERVAL_MS));
   }
   return reply;
 }
 
-function bulkAction(tabId: number, label: string, view: BlockView, showReply: (reply: PopupReply | undefined) => void): HTMLButtonElement {
+function bulkAction(tabId: number, label: string, view: BlockView, showReply: ShowReply): HTMLButtonElement {
   const button = element("button", label);
   button.type = "button";
   button.addEventListener("click", async () => showReply(await ask(tabId, { type: SET_ALL_VIEWS, view })));
@@ -169,7 +184,7 @@ function isWebPage(url: string | undefined): boolean {
   return ["http:", "https:", "file:"].includes(protocol) && !ADD_ON_STORES.includes(hostname);
 }
 
-/** The site a Disabled Site setting applies to: the page's hostname, for web pages served from one. */
+/** The site a Disabled Site setting applies to: the page's hostname (see CONTEXT.md), for web pages served from one. */
 function siteOf(url: string | undefined): string | null {
   if (!url || !isWebPage(url)) return null;
   return new URL(url).hostname || null;
