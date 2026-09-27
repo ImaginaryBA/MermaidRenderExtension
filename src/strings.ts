@@ -7,4 +7,7 @@ export const strings = {
   sourceRepaired: "Some spaces or quotes in this block were fixed before drawing, which may be related to the error.",
   errorDetails: "Details",
   notSvg: "Mermaid did not produce an SVG image.",
+  zoomIn: "Zoom in",
+  zoomOut: "Zoom out",
+  resetZoom: "Fit to width",
 } as const;

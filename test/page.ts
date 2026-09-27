@@ -1,18 +1,24 @@
 import { vi } from "vitest";
 import { HOST_TAG, mount, RESCAN_DELAY_MS, type Mounted } from "../src/controller";
-import type { Renderer, RenderResult, Settings } from "../src/ports";
+import type { Renderer, RenderResult, Settings, Theme } from "../src/ports";
+import { strings } from "../src/strings";
 
 export interface FakeRenderer extends Renderer {
   calls: string[];
+  /** The theme each call asked for, in the same order as `calls`. */
+  themes: Theme[];
 }
 
 /** A renderer that "draws" a Diagram as an <svg> whose text is the Mermaid Source. */
 export function fakeRenderer(result?: (source: string) => RenderResult): FakeRenderer {
   const calls: string[] = [];
+  const themes: Theme[] = [];
   return {
     calls,
-    async render(source) {
+    themes,
+    async render(source, { theme }) {
       calls.push(source);
+      themes.push(theme);
       if (result) return result(source);
       const svg = `<svg xmlns="http://www.w3.org/2000/svg"><text>${source}</text></svg>`;
       return { ok: true, svg };
@@ -57,6 +63,19 @@ export function renderError(n = 0) {
     /** The text inside the expandable section. */
     detail: details ? [...details.childNodes].filter((c) => c.nodeName !== "SUMMARY").map((c) => c.textContent).join("") : null,
   };
+}
+
+/** The n-th block's zoom buttons, found by their labels. */
+export function zoomButtons(n = 0) {
+  const root = hosts()[n]!.shadowRoot!;
+  const button = (label: string) => root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  return { zoomIn: button(strings.zoomIn), zoomOut: button(strings.zoomOut), reset: button(strings.resetZoom) };
+}
+
+/** The n-th block's Diagram zoom, where 1 is fitted to the block's width. */
+export function zoomLevel(n = 0): number {
+  const transform = (diagram(n)!.parentElement as HTMLElement).style.transform;
+  return Number(/scale\(([\d.]+)\)/.exec(transform)?.[1] ?? 1);
 }
 
 export function isHidden(el: Element): boolean {
