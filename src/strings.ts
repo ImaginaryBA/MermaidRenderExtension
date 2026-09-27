@@ -9,5 +9,5 @@ export const strings = {
   notSvg: "Mermaid did not produce an SVG image.",
   zoomIn: "Zoom in",
   zoomOut: "Zoom out",
-  resetZoom: "Fit to width",
+  fitToWidth: "Fit to width",
 } as const;

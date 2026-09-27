@@ -2,7 +2,7 @@ import { findMermaidBlocks, type MermaidBlock } from "./detector";
 import { isInEditingSurface } from "./editing-surfaces";
 import type { RenderOptions, Renderer, RenderResult, Settings } from "./ports";
 import { strings } from "./strings";
-import { inlineZoom } from "./zoom";
+import { inlineZoom, ZOOM_STYLE } from "./zoom";
 
 export interface Ports {
   renderer: Renderer;
@@ -138,33 +138,28 @@ button {
 .toggle::before, .zoom::before {
   content: ""; flex: none; width: 18px; height: 18px; border: 1.5px solid #fff; border-radius: 50%; box-sizing: border-box;
 }
-.toggle::before, .zoom-in::before {
+.toggle::before {
   background:
     linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat,
     linear-gradient(#fff, #fff) center / 1.5px 8px no-repeat;
 }
-.toggle[aria-pressed="true"]::before, .zoom-out::before { background: linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat; }
-/* Reset: a ring around a small square, "fit to the frame". */
-.zoom-reset::before { background: linear-gradient(#fff, #fff) center / 6px 6px no-repeat; }
-.zoom { width: 30px; height: 30px; padding: 0; background: #16233d; }
-button:hover:not(:disabled) { filter: brightness(1.12); box-shadow: 0 3px 12px #0b1a3380, inset 0 1px 0 #ffffff26; }
-button:active:not(:disabled) { filter: brightness(0.95); }
-button:disabled { cursor: default; }
+.toggle[aria-pressed="true"]::before { background: linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat; }
+button:hover:not([aria-disabled="true"]) { filter: brightness(1.12); box-shadow: 0 3px 12px #0b1a3380, inset 0 1px 0 #ffffff26; }
+button:active:not([aria-disabled="true"]) { filter: brightness(0.95); }
 button:focus-visible { outline: 2px solid #7cb7ff; outline-offset: 2px; }
-:host([data-hover]) button, .controls:focus-within button, .toggle[aria-pressed="true"] { opacity: 1; }
-:host([data-hover]) button:disabled, .controls:focus-within button:disabled { opacity: 0.45; }
+:host([data-hover]) button, .controls:focus-within button, .toggle[aria-pressed="true"], .zoom { opacity: 1; }
 .diagram:empty { display: none; }
-.diagram { padding: 8px 0; overflow: hidden; border-radius: 8px; }
+/* The frame: its size is set by the fitted Diagram, and a zoomed Diagram is clipped to it. */
+.diagram { overflow: hidden; border-radius: 8px; }
 .diagram[data-theme="dark"] { background: #1b1d23; }
-.diagram.zoomed { cursor: grab; touch-action: none; user-select: none; }
-.diagram.zoomed:active { cursor: grabbing; }
+.canvas { padding: 8px 0; }
 .error { font: 13px/1.4 system-ui, sans-serif; border-left: 3px solid #d33; padding: 4px 8px; }
 .error p { margin: 0 0 4px; }
 .error summary { cursor: pointer; }
 .error pre { white-space: pre-wrap; font: 12px/1.4 ui-monospace, monospace; margin: 4px 0 0; }
 /* Fitted to the block's width, but never enlarged beyond the Diagram's natural size. */
 .canvas svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
-`;
+${ZOOM_STYLE}`;
 
 /**
  * Inserts a Render Toggle before the block; the block's own elements are only hidden and shown (ADR 0003).
@@ -209,8 +204,8 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
   const showCode = () => {
     ++generation;
     diagram.replaceChildren();
-    zoom.show(null);
-    zoom.reset();
+    zoom.setCanvas(null);
+    zoom.fit();
     for (const [el, style] of hidden) restoreStyle(el, style);
     hidden.clear();
   };
@@ -230,11 +225,12 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
       canvas.append(svg);
       diagram.dataset.theme = theme;
       diagram.replaceChildren(canvas);
-      return zoom.show(canvas);
+      return zoom.setCanvas(canvas);
     }
     const showError = () => {
       if (current !== generation) return;
-      zoom.show(null);
+      zoom.setCanvas(null);
+      zoom.fit();
       diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, drawn.repairedSource !== drawn.source));
     };
     // A source that's still streaming is often briefly invalid, so keep the last good Diagram and only

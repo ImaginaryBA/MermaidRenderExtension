@@ -69,13 +69,18 @@ export function renderError(n = 0) {
 export function zoomButtons(n = 0) {
   const root = hosts()[n]!.shadowRoot!;
   const button = (label: string) => root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
-  return { zoomIn: button(strings.zoomIn), zoomOut: button(strings.zoomOut), reset: button(strings.resetZoom) };
+  return { zoomIn: button(strings.zoomIn), zoomOut: button(strings.zoomOut), fit: button(strings.fitToWidth) };
 }
 
-/** The n-th block's Diagram zoom, where 1 is fitted to the block's width. */
-export function zoomLevel(n = 0): number {
+/** How the n-th block's Diagram is zoomed and panned: scale 1 is fitted to the block's width. */
+export function zoomState(n = 0): { scale: number; x: number; y: number } {
   const transform = (diagram(n)!.parentElement as HTMLElement).style.transform;
-  return Number(/scale\(([\d.]+)\)/.exec(transform)?.[1] ?? 1);
+  const [, x = "0", y = "0", scale = "1"] = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(transform) ?? [];
+  return { scale: Number(scale), x: Number(x), y: Number(y) };
+}
+
+export function zoomLevel(n = 0): number {
+  return zoomState(n).scale;
 }
 
 export function isHidden(el: Element): boolean {

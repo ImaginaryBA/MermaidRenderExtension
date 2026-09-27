@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
-import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor, zoomButtons, zoomLevel } from "./page";
+import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
 
@@ -448,7 +448,7 @@ describe("Diagram presentation", () => {
     toggles()[0].click();
     await waitFor(() => expect(diagram()).not.toBeNull());
   };
-  const colorScheme = (dark: boolean) => {
+  const colourScheme = (dark: boolean) => {
     window.matchMedia = ((query: string) => ({ matches: dark && query.includes("dark") })) as typeof window.matchMedia;
   };
   afterEach(() => {
@@ -468,7 +468,7 @@ describe("Diagram presentation", () => {
     [true, "dark"],
     [false, "default"],
   ])("with a dark colour scheme %s, the renderer is asked for the %s theme", async (dark, theme) => {
-    colorScheme(dark);
+    colourScheme(dark);
     const renderer = fakeRenderer();
     await mountPage(MARKED, { renderer });
 
@@ -486,10 +486,10 @@ describe("Diagram presentation", () => {
     expect(renderer.themes).toEqual(["default"]);
   });
 
-  test("the zoom buttons zoom in and out, and reset returns to fitted", async () => {
+  test("the zoom buttons zoom in and out, and fit returns to fitted", async () => {
     await mountPage(MARKED);
     await showDiagram();
-    const { zoomIn, zoomOut, reset } = zoomButtons();
+    const { zoomIn, zoomOut, fit } = zoomButtons();
     expect(zoomLevel()).toBe(1);
 
     zoomIn.click();
@@ -499,20 +499,26 @@ describe("Diagram presentation", () => {
     expect(zoomLevel()).toBeGreaterThan(once);
     zoomOut.click();
     expect(zoomLevel()).toBeCloseTo(once);
-    reset.click();
+    fit.click();
     expect(zoomLevel()).toBe(1);
   });
 
-  test("zooming out stops at fitted, where zoom out and reset are disabled", async () => {
+  test("zooming out stops at fitted, where zoom out and fit are marked unavailable but stay focusable", async () => {
     await mountPage(MARKED);
     await showDiagram();
-    const { zoomIn, zoomOut, reset } = zoomButtons();
+    const { zoomIn, zoomOut, fit } = zoomButtons();
 
-    expect([zoomOut.disabled, reset.disabled]).toEqual([true, true]);
+    const unavailable = () => [zoomOut, fit].map((b) => b.getAttribute("aria-disabled"));
+    expect(unavailable()).toEqual(["true", "true"]);
     zoomOut.click();
     expect(zoomLevel()).toBe(1);
     zoomIn.click();
-    expect([zoomOut.disabled, reset.disabled]).toEqual([false, false]);
+    expect(unavailable()).toEqual(["false", "false"]);
+
+    zoomOut.focus();
+    zoomOut.click();
+    expect(zoomOut.disabled).toBe(false);
+    expect(hosts()[0].shadowRoot!.activeElement).toBe(zoomOut);
   });
 
   test("Ctrl+wheel over the Diagram zooms; a plain wheel is left to scroll the page", async () => {
@@ -550,6 +556,59 @@ describe("Diagram presentation", () => {
     toggles()[0].click();
     await showDiagram();
 
+    expect(zoomLevel()).toBe(1);
+  });
+});
+
+describe("Diagram presentation: zoom details", () => {
+  const showDiagram = async () => {
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+  };
+  const frame = () => diagram()!.parentElement!.parentElement!;
+  const ctrlWheel = (deltaY: number) =>
+    diagram()!.dispatchEvent(new WheelEvent("wheel", { deltaY, ctrlKey: true, bubbles: true, cancelable: true, composed: true }));
+
+  test("a small Ctrl+wheel step, like a trackpad pinch, zooms a little; a sideways wheel doesn't zoom", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+
+    ctrlWheel(0);
+    expect(zoomLevel()).toBe(1);
+    ctrlWheel(-4);
+    expect(zoomLevel()).toBeGreaterThan(1);
+    expect(zoomLevel()).toBeLessThan(1.05);
+  });
+
+  test("when zoomed in, the frame can be focused and its arrow keys are taken for panning", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    expect(frame().tabIndex).toBe(-1);
+
+    zoomButtons().zoomIn.click();
+    expect(frame().tabIndex).toBe(0);
+    const key = new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true });
+    frame().dispatchEvent(key);
+
+    // jsdom has no layout, so the canvas measures 0 and the pan itself is clamped away; the key is still handled.
+    expect(key.defaultPrevented).toBe(true);
+    expect(zoomState().scale).toBeGreaterThan(1);
+  });
+
+  test("a Render Error resets the zoom, so the next Diagram starts fitted", async () => {
+    const renderer = fakeRenderer((source) =>
+      /-->\s*$/.test(source) ? { ok: false, message: "Parse error" } : { ok: true, svg: `<svg><text>${source}</text></svg>` },
+    );
+    await mountPage(MARKED, { renderer });
+    await showDiagram();
+    zoomButtons().zoomIn.click();
+    const code = document.getElementById("code")!.querySelector("code")!;
+
+    code.textContent = "graph TD; A-->";
+    await waitFor(() => expect(renderError()).not.toBeNull(), ERROR_SETTLE_MS + 1000);
+    code.textContent = "graph TD; A-->C";
+
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->C"));
     expect(zoomLevel()).toBe(1);
   });
 });
