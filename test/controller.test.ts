@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
+import { WORKSPACE_TAG } from "../src/workspace";
 import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
@@ -610,5 +611,19 @@ describe("Diagram presentation: zoom details", () => {
 
     await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->C"));
     expect(zoomLevel()).toBe(1);
+  });
+});
+
+describe("Mermaid's render workspace", () => {
+  test("changes inside the workspace Mermaid draws in never add toggles or trigger rescans", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+
+    const workspace = document.createElement(WORKSPACE_TAG);
+    document.body.append(workspace);
+    workspace.innerHTML = `<pre><code class="language-mermaid">graph TD; temp</code></pre>`;
+    await settle();
+
+    expect(toggles()).toHaveLength(1);
   });
 });

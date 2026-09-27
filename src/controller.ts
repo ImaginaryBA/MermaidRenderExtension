@@ -2,6 +2,7 @@ import { findMermaidBlocks, type MermaidBlock } from "./detector";
 import { isInEditingSurface } from "./editing-surfaces";
 import type { RenderOptions, Renderer, RenderResult, Settings } from "./ports";
 import { strings } from "./strings";
+import { WORKSPACE_TAG } from "./workspace";
 import { inlineZoom, ZOOM_STYLE } from "./zoom";
 
 export interface Ports {
@@ -52,7 +53,11 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
 
   /** Whether a page change is only the extension inserting, moving or removing its own elements. */
   const isOwnChange = (record: MutationRecord): boolean => {
+    // Mermaid draws in the render workspace, adding and removing elements with every Diagram.
+    const target = record.target instanceof Element ? record.target : record.target.parentElement;
+    if (target?.closest(WORKSPACE_TAG)) return true;
     if (record.type !== "childList") return false;
+    if ([...record.addedNodes, ...record.removedNodes].every((n) => n instanceof Element && n.localName === WORKSPACE_TAG)) return true;
     if (![...record.addedNodes, ...record.removedNodes].every((n) => n instanceof Element && n.localName === HOST_TAG)) return false;
     // The extension only removes a block's elements once the block is gone, or moves them (so they're
     // still connected). A block that's still attached but whose elements left the page lost them to the page.
