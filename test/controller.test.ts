@@ -393,3 +393,17 @@ describe("Dynamic pages", () => {
     await waitFor(() => expect(toggles()).toHaveLength(1));
   });
 });
+
+describe("Dynamic pages: the page removing the extension's elements", () => {
+  test("a block whose toggle the page removed gets it back, still showing its Diagram", async () => {
+    await mountPage(MARKED);
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->B"));
+
+    hosts()[0].remove();
+
+    await waitFor(() => expect(toggles()).toHaveLength(1));
+    expect(diagram()?.textContent).toBe("graph TD; A-->B");
+    expect(document.getElementById("code")!.previousElementSibling).toBe(hosts()[0]);
+  });
+});

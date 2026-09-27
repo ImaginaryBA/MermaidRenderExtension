@@ -48,7 +48,7 @@ If the page shows **no toggles at all**:
 
 - **Test-driven, at the two seams agreed in #2:**
   - **Seam 2 (Detector):** `findMermaidBlocks` in `src/detector.ts`, tested with HTML samples in `test/detector.test.ts`.
-  - **Seam 1 (page controller):** `mount` in `src/controller.ts` with fake renderer and settings ports. Tests use the helpers in `test/page.ts`: `mountPage`, `toggles`, `diagram`, `renderError`, `isHidden` and `waitFor`.
+  - **Seam 1 (page controller):** `mount` in `src/controller.ts` with fake renderer and settings ports. Tests use the helpers in `test/page.ts`: `mountPage`, `toggles`, `hosts`, `diagram`, `renderError`, `isHidden`, `waitFor` and `settle` (waits past the rescan delay, for checks that nothing happened). `mountPage` unmounts the previous test's page, because `mount` keeps watching the shared document.
   - Real drawing, zoom and the popup are checked by hand.
 - **Unicode test inputs** (non-breaking spaces, curly quotes, zero-width characters) are written as `\u` escapes in the source, never as raw characters, so they stay visible in diffs.
 - **Per ticket:** work on a branch, run `npm run check`, run a two-axis review (standards and spec), then open a PR whose body says `Closes #N` and squash-merge it.

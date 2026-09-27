@@ -26,6 +26,14 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
   // Keyed by the block's first element, which stays the same while a block's source changes.
   const attached = new Map<Element, AttachedBlock>();
 
+  const detachWhere = (shouldDetach: (key: Element) => boolean) => {
+    for (const [key, block] of attached) {
+      if (!shouldDetach(key)) continue;
+      block.detach();
+      attached.delete(key);
+    }
+  };
+
   const rescan = () => {
     const found = new Set<Element>();
     for (const block of findMermaidBlocks(doc.body)) {
@@ -35,27 +43,26 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
       if (existing) existing.update(block);
       else attached.set(key, attach(doc, block, renderer));
     }
-    for (const [key, block] of attached) {
-      if (found.has(key)) continue;
-      block.detach();
-      attached.delete(key);
-    }
+    detachWhere((key) => !found.has(key));
   };
 
-  // Nothing the extension inserted or hid may stay in an Editing Surface, even for the rescan delay,
-  // or an editor could save it. A switch to design mode isn't observable, so it's not caught.
-  const detachEditable = () => {
-    for (const [key, block] of attached) {
-      if (!isInEditingSurface(key)) continue;
-      block.detach();
-      attached.delete(key);
-    }
+  /** Whether a page change is only the extension inserting, moving or removing its own elements. */
+  const isOwnChange = (record: MutationRecord): boolean => {
+    if (record.type !== "childList") return false;
+    if (![...record.addedNodes, ...record.removedNodes].every((n) => n instanceof Element && n.localName === HOST_TAG)) return false;
+    // The extension only removes a block's elements once the block is gone, or moves them (so they're
+    // still connected). A block that's still attached but whose elements left the page lost them to the page.
+    const live = new Set([...attached.values()].map((b) => b.host));
+    return [...record.removedNodes].every((n) => !live.has(n as Element) || n.isConnected);
   };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   const observer = new MutationObserver((records) => {
-    if (records.every(isOwnInsertion)) return;
-    detachEditable();
+    const changes = records.filter((r) => !isOwnChange(r) && canAffectBlocks(r));
+    if (changes.length === 0) return;
+    // Nothing the extension inserted or hid may stay in an Editing Surface, even for the rescan delay,
+    // or an editor could save it. A switch to design mode isn't observable, so it's not caught.
+    detachWhere(isInEditingSurface);
     timer ??= setTimeout(() => {
       timer = undefined;
       rescan();
@@ -68,27 +75,37 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
     childList: true,
     characterData: true,
     attributes: true,
-    // Attributes that can make a block, stop one being a block, or make its region editable.
-    attributeFilter: ["contenteditable", "class", "lang", "data-lang"],
+    attributeOldValue: true,
+    attributeFilter: ["contenteditable", ...LABEL_ATTRIBUTES],
   });
 
   return {
     unmount() {
       observer.disconnect();
       clearTimeout(timer);
-      for (const block of attached.values()) block.detach();
-      attached.clear();
+      detachWhere(() => true);
     },
   };
 }
 
-/** Whether a page change is only the extension adding, moving or removing its own toggles. */
-function isOwnInsertion(record: MutationRecord): boolean {
-  if (record.type !== "childList") return false;
-  return [...record.addedNodes, ...record.removedNodes].every((n) => n instanceof Element && n.localName === HOST_TAG);
+/** Attributes the Detector reads a language label from. */
+const LABEL_ATTRIBUTES = ["class", "lang", "data-lang"];
+
+/**
+ * Whether a page change could add, change or remove a Mermaid Block. Label changes only matter on
+ * code elements (which Sniffed Blocks read labels from) or when a Mermaid label comes or goes, so
+ * pages that restyle elements all the time don't cause constant rescans.
+ */
+function canAffectBlocks(record: MutationRecord): boolean {
+  if (record.type !== "attributes" || record.attributeName === "contenteditable") return true;
+  const target = record.target as Element;
+  if (target.localName === "pre" || target.localName === "code") return true;
+  return [record.oldValue, target.getAttribute(record.attributeName!)].some((v) => v && /mermaid/i.test(v));
 }
 
 interface AttachedBlock {
+  /** The element the extension inserted before the block, holding its Render Toggle and Diagram. */
+  readonly host: Element;
   /** Takes the block as it's now found on the page, redrawing it if it's in Diagram View and its source changed. */
   update(block: MermaidBlock): void;
   /** Puts the block back in Code View and removes everything the extension inserted for it. */
@@ -212,7 +229,10 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
   listen([host, ...block.elements], true);
 
   return {
+    host,
     update(next) {
+      // The page may have removed or moved the host (say, a framework re-rendering the parent).
+      if (host.nextElementSibling !== next.elements[0]) next.elements[0].before(host);
       const sourceChanged = next.source !== block.source;
       const gone = block.elements.filter((el) => !next.elements.includes(el));
       const added = next.elements.filter((el) => !block.elements.includes(el));
@@ -225,7 +245,6 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
         restoreStyle(el, hidden.get(el)!);
         hidden.delete(el);
       }
-      if (host.nextElementSibling !== block.elements[0]) block.elements[0].before(host);
       if (!showingDiagram) return;
       hideCode();
       if (sourceChanged) void draw();
