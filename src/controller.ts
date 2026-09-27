@@ -1,9 +1,9 @@
 import { findMermaidBlocks, type MermaidBlock } from "./detector";
 import { isInEditingSurface } from "./editing-surfaces";
-import type { RenderOptions, Renderer, RenderResult, Settings } from "./ports";
+import type { RenderOptions, Renderer, RenderResult, Settings, Theme } from "./ports";
 import { strings } from "./strings";
 import { BUTTON_STYLE, iconButton } from "./buttons";
-import { openViewer, VIEWER_TAG } from "./viewer";
+import { openViewer, VIEWER_TAG, type OpenViewer } from "./viewer";
 import { WORKSPACE_TAG } from "./workspace";
 import { inlineZoom, ZOOM_STYLE } from "./zoom";
 
@@ -167,19 +167,29 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
   const diagram = doc.createElement("div");
   diagram.className = "diagram";
   const zoom = inlineZoom(doc, diagram);
+  /** The Diagram on show, as drawn, and the theme it was drawn in. */
+  let drawn: { svg: SVGSVGElement; theme: Theme } | null = null;
+  let viewer: OpenViewer | null = null;
   const openButton = iconButton(doc, strings.openViewer, "open-viewer", () => {
-    const svg = diagram.querySelector("svg");
-    if (svg) openViewer(doc, svg, diagram.dataset.theme === "dark" ? "dark" : "default", openButton);
+    if (!drawn) return;
+    viewer = openViewer(doc, drawn.svg, drawn.theme, () => {
+      viewer = null;
+      // Back to the button that opened it, or the toggle if the Diagram has gone since.
+      const target = openButton.hidden ? toggle : openButton;
+      if (target.isConnected) target.focus({ preventScroll: true });
+    });
   });
   const controls = doc.createElement("div");
   controls.className = "controls";
   controls.append(...zoom.buttons, openButton, toggle);
-  /** Shows the controls that act on a drawn Diagram, or hides them when there's none. */
-  const setCanvas = (canvas: HTMLElement | null) => {
-    zoom.setCanvas(canvas);
-    openButton.hidden = !canvas;
+  /** Shows a drawn Diagram's controls (zoom and the viewer button), or hides them when there's none. */
+  const showDiagramControls = (shown: { canvas: HTMLElement; svg: SVGSVGElement; theme: Theme } | null) => {
+    drawn = shown && { svg: shown.svg, theme: shown.theme };
+    zoom.setCanvas(shown?.canvas ?? null);
+    openButton.hidden = !shown;
+    if (!shown) viewer?.close();
   };
-  setCanvas(null);
+  showDiagramControls(null);
   root.append(style, controls, diagram);
   block.elements[0].before(host);
 
@@ -205,7 +215,7 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
   const showCode = () => {
     ++generation;
     diagram.replaceChildren();
-    setCanvas(null);
+    showDiagramControls(null);
     zoom.fit();
     for (const [el, style] of hidden) restoreStyle(el, style);
     hidden.clear();
@@ -216,7 +226,7 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
     const drawn = block;
     // A redraw keeps the previous Diagram on screen until the new one is ready.
     if (!diagram.hasChildNodes()) diagram.textContent = strings.rendering;
-    const theme = prefersDark(doc) ? "dark" : "default";
+    const theme: Theme = prefersDark(doc) ? "dark" : "default";
     const result = await renderSafely(renderer, drawn.repairedSource, { theme });
     const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
@@ -226,11 +236,11 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
       canvas.append(svg);
       diagram.dataset.theme = theme;
       diagram.replaceChildren(canvas);
-      return setCanvas(canvas);
+      return showDiagramControls({ canvas, svg, theme });
     }
     const showError = () => {
       if (current !== generation) return;
-      setCanvas(null);
+      showDiagramControls(null);
       zoom.fit();
       diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, drawn.repairedSource !== drawn.source));
     };

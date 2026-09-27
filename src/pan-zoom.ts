@@ -17,6 +17,11 @@ export interface View {
   y: number;
 }
 
+/** The canvas at its own size, unmoved. */
+export const UNZOOMED: Readonly<View> = { scale: 1, x: 0, y: 0 };
+
+const clamp = (value: number, [min, max]: [number, number]) => Math.min(max, Math.max(min, value));
+
 export interface PanZoomRules {
   /** Whether this wheel event zooms. Any other wheel event is left to scroll the page. */
   wheelZooms(event: WheelEvent): boolean;
@@ -33,7 +38,6 @@ export interface PanZoomRules {
 }
 
 export interface PanZoom {
-  readonly view: Readonly<View>;
   /** Zooms or pans `canvas` from now on (keeping the current view), or nothing when there's none. */
   setCanvas(canvas: HTMLElement | null): void;
   /** Zooms by `factor` around the frame's centre. */
@@ -48,12 +52,11 @@ export interface PanZoom {
  */
 export function panZoom(frame: HTMLElement, keyTarget: HTMLElement, rules: PanZoomRules): PanZoom {
   let canvas: HTMLElement | null = null;
-  const view: View = { scale: 1, x: 0, y: 0 };
+  const view: View = { ...UNZOOMED };
 
   const apply = () => {
     if (canvas) {
-      const [min, max] = rules.limits(canvas);
-      view.scale = Math.min(max, Math.max(min, view.scale));
+      view.scale = clamp(view.scale, rules.limits(canvas));
       rules.constrain?.(view, canvas);
       canvas.style.transformOrigin = "0 0";
       canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
@@ -68,8 +71,7 @@ export function panZoom(frame: HTMLElement, keyTarget: HTMLElement, rules: PanZo
     const box = canvas.getBoundingClientRect();
     const px = clientX - (box.left - view.x);
     const py = clientY - (box.top - view.y);
-    const [min, max] = rules.limits(canvas);
-    const next = Math.min(max, Math.max(min, view.scale * factor));
+    const next = clamp(view.scale * factor, rules.limits(canvas));
     view.x = px - ((px - view.x) * next) / view.scale;
     view.y = py - ((py - view.y) * next) / view.scale;
     view.scale = next;
@@ -119,14 +121,12 @@ export function panZoom(frame: HTMLElement, keyTarget: HTMLElement, rules: PanZo
   frame.addEventListener("pointercancel", endDrag);
 
   const fit = () => {
-    if (canvas) Object.assign(view, rules.fitted(canvas));
-    else Object.assign(view, { scale: 1, x: 0, y: 0 });
+    Object.assign(view, canvas ? rules.fitted(canvas) : UNZOOMED);
     apply();
   };
 
   apply();
   return {
-    view,
     setCanvas(next) {
       canvas = next;
       apply();

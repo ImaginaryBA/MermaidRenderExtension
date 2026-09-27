@@ -1,5 +1,5 @@
 import { iconButton } from "./buttons";
-import { panZoom, ZOOM_STEP } from "./pan-zoom";
+import { panZoom, UNZOOMED, ZOOM_STEP } from "./pan-zoom";
 import { strings } from "./strings";
 
 const MAX_SCALE = 8;
@@ -34,7 +34,7 @@ export function inlineZoom(doc: Document, frame: HTMLElement): InlineZoom {
 
   const zoom = panZoom(frame, frame, {
     wheelZooms: (event) => event.ctrlKey,
-    fitted: () => ({ scale: 1, x: 0, y: 0 }),
+    fitted: () => UNZOOMED,
     limits: () => [1, MAX_SCALE],
     canPan: (view) => view.scale > 1,
     // Keep the scaled canvas covering the frame, so panning never shows empty space.

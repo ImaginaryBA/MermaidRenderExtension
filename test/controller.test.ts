@@ -692,7 +692,7 @@ describe("Diagram Viewer", () => {
     viewerButton().focus();
 
     viewerButton().click();
-    expect(viewer()!.root.activeElement).not.toBeNull();
+    expect(viewer()!.root.activeElement).toBe(viewer()!.dialog);
 
     press(viewer()!.dialog, "Escape");
     expect(hosts()[0].shadowRoot!.activeElement).toBe(viewerButton());
@@ -731,17 +731,16 @@ describe("Diagram Viewer", () => {
     await mountPage(MARKED);
     await showDiagram();
     viewerButton().click();
-    const svg = viewer()!.svg!;
-    const scale = () => Number(/scale\(([\d.]+)\)/.exec((svg.parentElement as HTMLElement).style.transform)?.[1]);
-    const fitted = scale();
+    const v = viewer()!;
+    const fitted = v.scale();
 
     const wheel = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true, composed: true });
-    svg.dispatchEvent(wheel);
+    v.svg!.dispatchEvent(wheel);
 
     expect(wheel.defaultPrevented).toBe(true);
-    expect(scale()).toBeGreaterThan(fitted);
-    viewer()!.fit.click();
-    expect(scale()).toBe(fitted);
+    expect(v.scale()).toBeGreaterThan(fitted);
+    v.fit.click();
+    expect(v.scale()).toBe(fitted);
   });
 
   test("the viewer's labels come from the strings module", async () => {
@@ -750,7 +749,74 @@ describe("Diagram Viewer", () => {
     viewerButton().click();
     const v = viewer()!;
 
+    const labels = new Set<string>(Object.values(strings));
     expect(v.dialog.getAttribute("aria-label")).toBe(strings.viewerLabel);
-    expect([v.close, v.zoomIn, v.zoomOut, v.fit].every((b) => b?.tagName === "BUTTON")).toBe(true);
+    for (const button of v.root.querySelectorAll("button")) {
+      expect(labels.has(button.getAttribute("aria-label")!)).toBe(true);
+      expect(button.title).toBe(button.getAttribute("aria-label"));
+    }
+  });
+});
+
+describe("Diagram Viewer: staying in step with its block and the page", () => {
+  const showDiagram = async () => {
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+  };
+  afterEach(() => viewer()?.close.click());
+
+  test("switching the block back to Code View closes its viewer, returning focus to the toggle", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    toggles()[0].click();
+
+    expect(viewer()).toBeNull();
+    expect(hosts()[0].shadowRoot!.activeElement).toBe(toggles()[0]);
+  });
+
+  test("removing the block closes its viewer", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    document.getElementById("code")!.remove();
+
+    await waitFor(() => expect(viewer()).toBeNull());
+  });
+
+  test("unmounting closes the viewer", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    await mountPage("<p>Another page</p>");
+
+    expect(viewer()).toBeNull();
+  });
+
+  test.each([
+    ["over the toolbar", (v: NonNullable<ReturnType<typeof viewer>>) => v.close, { deltaY: 100 }],
+    ["sideways over the Diagram", (v: NonNullable<ReturnType<typeof viewer>>) => v.svg!, { deltaX: 100 }],
+  ])("a wheel %s never reaches the page", async (_where, target, delta) => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    const wheel = new WheelEvent("wheel", { ...delta, bubbles: true, cancelable: true, composed: true });
+    target(viewer()!).dispatchEvent(wheel);
+
+    expect(wheel.defaultPrevented).toBe(true);
+  });
+
+  test("the overlay element protects itself from page CSS with inline styles", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    viewerButton().click();
+
+    const host = viewer()!.root.host as HTMLElement;
+    expect(host.style.getPropertyPriority("display")).toBe("important");
+    expect(host.style.getPropertyValue("display")).toBe("block");
   });
 });

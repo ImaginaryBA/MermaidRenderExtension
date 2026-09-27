@@ -104,6 +104,8 @@ export function viewer() {
     zoomIn: button(strings.zoomIn),
     zoomOut: button(strings.zoomOut),
     fit: button(strings.fitToWindow),
+    /** The scale the viewer shows its Diagram at. */
+    scale: () => Number(/scale\(([\d.]+)\)/.exec((root.querySelector("svg")!.parentElement as HTMLElement).style.transform)?.[1]),
   };
 }
 

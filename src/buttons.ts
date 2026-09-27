@@ -25,7 +25,8 @@ button:focus-visible { outline: 2px solid #7cb7ff; outline-offset: 2px; }
 button[aria-disabled="true"] { cursor: default; filter: saturate(0.4); }
 .toggle { padding: 5px 16px 5px 5px; }
 .icon { width: 30px; height: 30px; padding: 0; background: #16233d; }
-/* The ring every icon sits in. Its 8px content box is where the icon's bars are drawn. */
+/* The ring every icon sits in. Its 8px content box is where the icon's bars are drawn. Each icon's "background"
+   shorthand resets "background-origin", so every icon rule sets it again. */
 .toggle::before, .icon::before {
   content: ""; flex: none; width: 18px; height: 18px; padding: 3.5px; box-sizing: border-box;
   border: 1.5px solid #fff; border-radius: 50%; background-origin: content-box;
