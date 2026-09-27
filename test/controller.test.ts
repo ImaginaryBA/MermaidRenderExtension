@@ -1,5 +1,5 @@
-import { HOST_TAG } from "../src/controller";
 import { describe, expect, test } from "vitest";
+import { HOST_TAG } from "../src/controller";
 import { diagram, renderError, fakeRenderer, fakeSettings, isHidden, mountPage, toggles, waitFor } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;

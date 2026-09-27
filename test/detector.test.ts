@@ -36,7 +36,7 @@ describe("Marked Blocks", () => {
     expect(blocks[0].elements).toEqual([document.getElementById("b")]);
   });
 
-  test("code blocks in other languages are not Mermaid Blocks", () => {
+  test("code elements labelled with other languages are not Mermaid Blocks", () => {
     const root = page(`
       <pre><code class="language-js">graph TD</code></pre>
       <pre lang="python"><code>print(1)</code></pre>
@@ -146,7 +146,7 @@ describe("Sniffed Blocks", () => {
     "packet-beta\n  0-15: \"Port\"",
     "kanban\n  Todo",
     "architecture-beta\n  service db(database)[DB]",
-  ])("an unlabelled code block starting %j is a Sniffed Block", (text) => {
+  ])("an unlabelled <pre> starting %j is a Sniffed Block", (text) => {
     const blocks = sniff(text);
 
     expect(blocks).toHaveLength(1);
@@ -178,14 +178,14 @@ describe("Sniffed Blocks", () => {
     expect(sniff(text)).toEqual([]);
   });
 
-  test("a block labelled with another language is not sniffed", () => {
+  test("a <pre> labelled with another language is not sniffed", () => {
     const root = page(`<pre><code class="language-python">graph TD</code></pre><pre lang="js">graph TD</pre>`);
 
     expect(findMermaidBlocks(root)).toEqual([]);
   });
 
   test.each(["text", "plaintext", "none", "nohighlight"])(
-    "a block labelled %s counts as unlabelled",
+    "a <pre> labelled %s counts as unlabelled",
     (lang) => {
       const root = page(`<pre><code class="language-${lang}">graph TD\n  A --> B</code></pre>`);
 
@@ -193,7 +193,7 @@ describe("Sniffed Blocks", () => {
     },
   );
 
-  test("a block that is both labelled and keyword-matched is reported once, as marked", () => {
+  test("a <pre> that is both labelled and keyword-matched is reported once, as a Marked Block", () => {
     const root = page(`<pre><code class="language-mermaid">graph TD\n  A --> B</code></pre>`);
 
     expect(findMermaidBlocks(root).map((b) => b.kind)).toEqual(["marked"]);
@@ -267,7 +267,25 @@ describe("Text Fences", () => {
     expect(ids(findMermaidBlocks(root)[0].elements)).toEqual(["open", "l", "close"]);
   });
 
-  test("two fences in a row are two blocks", () => {
+  test("an empty paragraph is one blank line", () => {
+    const root = page(`<p>\`\`\`mermaid</p><p>graph TD</p><p><br></p><p>A --&gt; B</p><p>\`\`\`</p>`);
+
+    expect(findMermaidBlocks(root)[0].source).toBe("graph TD\n\nA --> B");
+  });
+
+  test("an opening line split by inline formatting is still recognised", () => {
+    const root = page(`<p id="open"><span>\`\`\`</span>mermaid</p><p id="l">graph TD</p><p id="close">\`\`\`</p>`);
+
+    expect(ids(findMermaidBlocks(root)[0]?.elements ?? [])).toEqual(["open", "l", "close"]);
+  });
+
+  test("HTML comments between the lines are ignored", () => {
+    const root = page(`<p>\`\`\`mermaid</p><!-- editor marker --><p>graph TD</p><p>\`\`\`</p>`);
+
+    expect(findMermaidBlocks(root).map((b) => b.source)).toEqual(["graph TD"]);
+  });
+
+  test("two Text Fences in a row are two blocks", () => {
     const root = page(`<p>\`\`\`mermaid</p><p>graph TD; one</p><p>\`\`\`</p><p>\`\`\`mermaid</p><p>graph TD; two</p><p>\`\`\`</p>`);
 
     expect(findMermaidBlocks(root).map((b) => b.source)).toEqual(["graph TD; one", "graph TD; two"]);
@@ -282,9 +300,22 @@ describe("Text Fences", () => {
     ["for another language", `<p>\`\`\`python</p><p>print(1)</p><p>\`\`\`</p>`],
     ["sharing its element with other text", `<p>Intro<br>\`\`\`mermaid<br>graph TD<br>\`\`\`</p>`],
     ["interrupted by loose text between the lines", `<div><p>\`\`\`mermaid</p>stray text<p>graph TD</p><p>\`\`\`</p></div>`],
+    [
+      "with one line per table cell",
+      `<table><tr><td><p>\`\`\`mermaid</p></td><td><p>graph TD</p></td><td><p>\`\`\`</p></td></tr></table>`,
+    ],
+    [
+      "with one line per bare table cell",
+      `<table><tr><td>\`\`\`mermaid</td><td>graph TD</td><td>\`\`\`</td></tr></table>`,
+    ],
+    [
+      "with one line per table row",
+      `<table><tr><td>\`\`\`mermaid</td></tr><tr><td>graph TD</td></tr><tr><td>\`\`\`</td></tr></table>`,
+    ],
+    ["containing a script", `<p>\`\`\`mermaid</p><p>graph TD</p><script>alert(1)</script><p>\`\`\`</p>`],
     ["inside a code element", `<pre><code class="language-markdown">\`\`\`mermaid\ngraph TD\n\`\`\`</code></pre>`],
     ["inside a script", `<script type="text/plain">\`\`\`mermaid\ngraph TD\n\`\`\`</script>`],
-  ])("a fence %s is not detected", (_name, html) => {
+  ])("a Text Fence %s is not detected", (_name, html) => {
     expect(findMermaidBlocks(page(html))).toEqual([]);
   });
 

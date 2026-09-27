@@ -14,18 +14,18 @@ export interface MermaidBlock {
   elements: Element[];
 }
 
-type Found = { kind: MermaidBlockKind; elements: Element[]; source: string };
+/** A detected block before Source Repair. */
+type Candidate = { kind: MermaidBlockKind; elements: Element[]; source: string };
 
 /** Finds the Mermaid Blocks under `root`, in document order. */
 export function findMermaidBlocks(root: Element): MermaidBlock[] {
   const found = findMarked(root);
   found.push(...findSniffed(root, found));
   for (const fence of findTextFences(root)) {
-    const overlaps = found.some((f) => f.elements.some((el) => fence.elements.some((e) => el.contains(e) || e.contains(el))));
-    if (!overlaps) found.push({ kind: "text-fence", ...fence });
+    if (!found.some((f) => overlaps(f.elements, fence.elements))) found.push({ kind: "text-fence", ...fence });
   }
   return found
-    .sort((a, b) => (a.elements[0].compareDocumentPosition(b.elements[0]) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+    .sort((a, b) => documentOrder(a.elements[0], b.elements[0]))
     .map(({ kind, elements, source }) => ({ kind, source, repairedSource: repairSource(source), elements }));
 }
 
@@ -34,8 +34,8 @@ const LANGUAGE_CLASS = /^(?:language|lang)-(.+)$/i;
 /** Language labels that say nothing about the content, so the block still counts as unlabelled. */
 const PLAIN_LANGUAGES = new Set(["text", "plaintext", "plain", "txt", "none", "nohighlight"]);
 
-function findMarked(root: ParentNode): Found[] {
-  const found: Found[] = [];
+function findMarked(root: ParentNode): Candidate[] {
+  const found: Candidate[] = [];
   for (const el of root.querySelectorAll(MARKED_CANDIDATES)) {
     if (!languageLabels(el).includes("mermaid")) continue;
     const container = codeContainer(el);
@@ -46,11 +46,10 @@ function findMarked(root: ParentNode): Found[] {
 }
 
 /** Unlabelled <pre> elements whose text starts with a Mermaid diagram keyword. */
-function findSniffed(root: ParentNode, already: Found[]): Found[] {
-  const found: Found[] = [];
+function findSniffed(root: ParentNode, marked: Candidate[]): Candidate[] {
+  const found: Candidate[] = [];
   for (const pre of root.querySelectorAll("pre")) {
-    const overlaps = already.some((f) => f.elements.some((el) => el.contains(pre) || pre.contains(el)));
-    if (overlaps || isLabelledOtherLanguage(pre)) continue;
+    if (marked.some((m) => overlaps(m.elements, [pre])) || isLabelledOtherLanguage(pre)) continue;
     const source = pre.textContent ?? "";
     if (startsWithDiagramKeyword(source)) found.push({ kind: "sniffed", elements: [pre], source });
   }
@@ -71,6 +70,16 @@ function isLabelledOtherLanguage(pre: Element): boolean {
   return [pre, ...pre.querySelectorAll("code")]
     .flatMap(languageLabels)
     .some((label) => label !== "mermaid" && !PLAIN_LANGUAGES.has(label));
+}
+
+/** Whether any element of `a` contains, or is contained by, any element of `b`. */
+function overlaps(a: Element[], b: Element[]): boolean {
+  return a.some((x) => b.some((y) => x.contains(y) || y.contains(x)));
+}
+
+function documentOrder(a: Element, b: Element): number {
+  if (a === b) return 0;
+  return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
 }
 
 /** A labelled <code> inside a <pre> is shown by the <pre>, so the block covers the <pre>. */
