@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { HOST_TAG } from "../src/controller";
+import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
 import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor } from "./page";
 
@@ -405,5 +405,40 @@ describe("Dynamic pages: the page removing the extension's elements", () => {
     await waitFor(() => expect(toggles()).toHaveLength(1));
     expect(diagram()?.textContent).toBe("graph TD; A-->B");
     expect(document.getElementById("code")!.previousElementSibling).toBe(hosts()[0]);
+  });
+});
+
+describe("Dynamic pages: redrawing while the source changes", () => {
+  /** Fails like Mermaid does on a source cut off mid-arrow. */
+  const failWhenCutOff = () =>
+    fakeRenderer((source) =>
+      /-->s*$/.test(source) ? { ok: false, message: "Parse error" } : { ok: true, svg: `<svg><text>${source}</text></svg>` },
+    );
+  const code = () => document.getElementById("code")!.querySelector("code")!;
+
+  test("a redraw that fails while the source is still changing keeps the last good Diagram", async () => {
+    await mountPage(MARKED, { renderer: failWhenCutOff() });
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->B"));
+
+    code().textContent = "graph TD; A-->B; B-->";
+    await settle();
+    expect(renderError()).toBeNull();
+    expect(diagram()?.textContent).toBe("graph TD; A-->B");
+
+    code().textContent = "graph TD; A-->B; B-->C";
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->B; B-->C"));
+    expect(renderError()).toBeNull();
+  });
+
+  test("a source that stays invalid shows its Render Error once it stops changing", async () => {
+    await mountPage(MARKED, { renderer: failWhenCutOff() });
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+
+    code().textContent = "graph TD; A-->B; B-->";
+
+    await waitFor(() => expect(renderError()?.detail).toBe("Parse error"), ERROR_SETTLE_MS + 1000);
+    expect(diagram()).toBeNull();
   });
 });

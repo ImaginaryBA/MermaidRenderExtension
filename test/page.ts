@@ -63,8 +63,8 @@ export function isHidden(el: Element): boolean {
   return getComputedStyle(el).display === "none";
 }
 
-export function waitFor(assertion: () => void): Promise<void> {
-  return vi.waitFor(assertion, { timeout: 1000, interval: 5 });
+export function waitFor(assertion: () => void, timeout = 1000): Promise<void> {
+  return vi.waitFor(assertion, { timeout, interval: 5 });
 }
 
 /** Waits long enough for the controller to have reacted to any page changes, for checks that nothing happened. */

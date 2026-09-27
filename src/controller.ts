@@ -16,6 +16,9 @@ export interface Mounted {
 /** Page changes are gathered for this long before the page is scanned again, so a stream of changes causes few rescans and redraws. */
 export const RESCAN_DELAY_MS = 150;
 
+/** How long a redraw's source must stay unchanged before its Render Error replaces the last good Diagram. */
+export const ERROR_SETTLE_MS = 1000;
+
 /**
  * Finds the Mermaid Blocks on the page and gives each one a Render Toggle, then keeps watching:
  * blocks added later get a toggle, blocks in Diagram View redraw when their source changes, and
@@ -197,8 +200,15 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
     const result = await renderSafely(renderer, drawn.repairedSource);
     const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
-    if (svg) diagram.replaceChildren(svg);
-    else diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, drawn.repairedSource !== drawn.source));
+    if (svg) return diagram.replaceChildren(svg);
+    const showError = () => {
+      if (current !== generation) return;
+      diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, drawn.repairedSource !== drawn.source));
+    };
+    // A source that's still streaming is often briefly invalid, so keep the last good Diagram and only
+    // show the error if the source then stops changing (any change starts a newer generation).
+    if (diagram.querySelector("svg")) setTimeout(showError, ERROR_SETTLE_MS);
+    else showError();
   };
 
   toggle.addEventListener("click", () => {
