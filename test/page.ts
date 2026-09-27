@@ -27,8 +27,33 @@ export function fakeRenderer(result?: (source: string) => RenderResult): FakeRen
   };
 }
 
-export function fakeSettings({ disabled = false } = {}): Settings {
-  return { isSiteDisabled: async () => disabled };
+export interface FakeSettings extends Settings {
+  /** The hostnames asked about, in order. */
+  asked: string[];
+  /** Turns the site off or on, telling anyone listening, as a change in extension storage would. */
+  setDisabled(disabled: boolean): void;
+}
+
+/** Settings where the page's site is disabled or not, changeable during a test. */
+export function fakeSettings({ disabled = false } = {}): FakeSettings {
+  let current = disabled;
+  const asked: string[] = [];
+  const listeners = new Set<() => void>();
+  return {
+    asked,
+    async isSiteDisabled(hostname) {
+      asked.push(hostname);
+      return current;
+    },
+    onChange(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setDisabled(next) {
+      current = next;
+      for (const listener of listeners) listener();
+    },
+  };
 }
 
 /** The page mounted by the previous test, which keeps watching the shared document until unmounted. */
@@ -36,7 +61,7 @@ let mounted: Mounted | undefined;
 
 export async function mountPage(
   html: string,
-  { renderer = fakeRenderer(), settings = fakeSettings() } = {},
+  { renderer = fakeRenderer(), settings = fakeSettings() as Settings } = {},
 ): Promise<Mounted> {
   mounted?.unmount();
   document.body.innerHTML = html;

@@ -16,4 +16,6 @@ export interface Renderer {
 /** The user's settings. The real adapter reads extension storage; tests use a fake. */
 export interface Settings {
   isSiteDisabled(hostname: string): Promise<boolean>;
+  /** Calls `listener` whenever the settings change, until the returned function is called. */
+  onChange(listener: () => void): () => void;
 }

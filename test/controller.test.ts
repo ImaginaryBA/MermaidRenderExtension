@@ -225,10 +225,84 @@ describe("pages without Mermaid", () => {
 });
 
 describe("Disabled Site", () => {
+  const TWO = MARKED + "<pre>graph TD; sniffed</pre>";
+
   test("gets no toggles", async () => {
     await mountPage(MARKED, { settings: fakeSettings({ disabled: true }) });
 
     expect(toggles()).toEqual([]);
+  });
+
+  test("the setting is looked up by the page's hostname", async () => {
+    const settings = fakeSettings();
+    await mountPage(MARKED, { settings });
+
+    expect(settings.asked).toEqual([location.hostname]);
+  });
+
+  test("turning the site off removes everything the extension inserted and restores the page exactly", async () => {
+    const settings = fakeSettings();
+    const renderer = fakeRenderer();
+    await mountPage(TWO, { settings, renderer });
+    // The page as it was parsed, before the extension inserted anything.
+    const before = Object.assign(document.createElement("div"), { innerHTML: TWO }).innerHTML;
+    toggles()[0].click();
+    await waitFor(() => expect(diagram(0)).not.toBeNull());
+    viewerButton().click();
+
+    settings.setDisabled(true);
+
+    await waitFor(() => expect(hosts()).toEqual([]));
+    expect(viewer()).toBeNull();
+    expect(document.body.innerHTML).toBe(before);
+  });
+
+  test("a disabled site stops watching the page", async () => {
+    const settings = fakeSettings();
+    await mountPage(MARKED, { settings });
+    settings.setDisabled(true);
+    await waitFor(() => expect(hosts()).toEqual([]));
+
+    document.body.insertAdjacentHTML("beforeend", "<pre>graph TD; late</pre>");
+    await settle();
+
+    expect(hosts()).toEqual([]);
+  });
+
+  test("turning the site back on finds its blocks again, without a reload", async () => {
+    const settings = fakeSettings({ disabled: true });
+    const mounted = await mountPage(TWO, { settings });
+    expect(mounted.siteDisabled).toBe(true);
+
+    settings.setDisabled(false);
+
+    await waitFor(() => expect(toggles()).toHaveLength(2));
+    expect(mounted.siteDisabled).toBe(false);
+    expect(answerPopup(mounted, { type: GET_BLOCK_COUNT })).toEqual({ count: 2, siteDisabled: false });
+  });
+
+  test("a quick off-and-on leaves exactly one set of toggles", async () => {
+    const settings = fakeSettings();
+    await mountPage(TWO, { settings });
+
+    settings.setDisabled(true);
+    settings.setDisabled(false);
+    settings.setDisabled(true);
+    settings.setDisabled(false);
+    await settle();
+
+    expect(toggles()).toHaveLength(2);
+  });
+
+  test("after unmounting, a settings change doesn't bring the toggles back", async () => {
+    const settings = fakeSettings({ disabled: true });
+    const mounted = await mountPage(MARKED, { settings });
+
+    mounted.unmount();
+    settings.setDisabled(false);
+    await settle();
+
+    expect(hosts()).toEqual([]);
   });
 });
 
