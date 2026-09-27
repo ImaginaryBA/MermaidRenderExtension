@@ -358,7 +358,8 @@ describe("Editing Surfaces", () => {
 
   test("Mermaid inside a <textarea> is not detected", () => {
     const root = page(`<textarea>\`\`\`mermaid\ngraph TD; A-->B\n\`\`\`</textarea>
-      <textarea><pre><code class="language-mermaid">graph TD; A-->B</code></pre></textarea>`);
+      <textarea><pre><code class="language-mermaid">graph TD; A-->B</code></pre></textarea>
+      <textarea><pre>graph TD; A-->B</pre></textarea>`);
 
     expect(findMermaidBlocks(root)).toEqual([]);
   });

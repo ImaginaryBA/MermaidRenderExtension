@@ -254,9 +254,18 @@ describe("Editing Surfaces", () => {
     document.getElementById("region")!.setAttribute("contenteditable", "");
     await waitFor(() => expect(toggles()).toEqual([]));
     finish({ ok: true, svg: `<svg xmlns="http://www.w3.org/2000/svg"></svg>` });
+    // Nothing should change, so there is no condition to wait for: give the render time to land.
     await new Promise((r) => setTimeout(r, 10));
 
     expect(document.getElementById("region")!.innerHTML).toBe(serialized(MARKED));
+  });
+
+  test("a block moved into an editable region after mount loses its toggle", async () => {
+    await mountPage(`<div id="region">${MARKED}</div><div id="editor" contenteditable="true"></div>`);
+
+    document.getElementById("editor")!.append(document.getElementById("region")!);
+
+    await waitFor(() => expect(toggles()).toEqual([]));
   });
 
   test("blocks outside the region that became editable keep their toggles", async () => {

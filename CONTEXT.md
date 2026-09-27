@@ -52,7 +52,7 @@ A popup action that sets the Block View of every Mermaid Block on the current pa
 What a block in Diagram View shows in place of a Diagram when its Mermaid Source can't be drawn.
 
 **Editing Surface**:
-Any part of a page where the user is editing content, such as a wiki editor or a text box. The extension never detects Mermaid Blocks inside one.
+Any part of a page where the user is editing content, such as a wiki editor or a text box: an editable element (including a non-editable island inside one), a `<textarea>`, or a document in design mode. The extension never detects Mermaid Blocks inside one, and a block that ends up inside one after the page loads goes back to Code View and loses its Render Toggle.
 
 **Disabled Site**:
 A site on which the user has turned the extension off; no Mermaid Blocks are detected there.

@@ -11,18 +11,30 @@ export interface Ports {
 /** Finds the Mermaid Blocks on the page and gives each one a Render Toggle. */
 export async function mount(doc: Document, { renderer, settings }: Ports): Promise<void> {
   if (await settings.isSiteDisabled(doc.location.hostname)) return;
-  const attached = new Map<MermaidBlock, () => void>();
+  const attached = new Map<MermaidBlock, Detach>();
   for (const block of findMermaidBlocks(doc.body)) attached.set(block, attach(doc, block, renderer));
+  detachWhenEditable(doc, attached);
+}
 
-  // A region that becomes an Editing Surface (say, a wiki switching to edit mode) must not
-  // keep anything the extension inserted or hid, or the editor could save it.
-  new MutationObserver(() => {
+/** Puts a block back in Code View and removes everything the extension inserted for it. */
+type Detach = () => void;
+
+/**
+ * Detaches any block that ends up inside an Editing Surface, whether its region becomes editable
+ * (say, a wiki switching to edit mode) or it is moved into an editor, so the editor can't save
+ * anything the extension inserted or hid. A switch to design mode isn't observable, so it's not caught.
+ */
+function detachWhenEditable(doc: Document, attached: Map<MermaidBlock, Detach>): void {
+  if (attached.size === 0) return;
+  const observer = new MutationObserver(() => {
     for (const [block, detach] of attached) {
       if (!isInEditingSurface(block.elements[0])) continue;
       detach();
       attached.delete(block);
     }
-  }).observe(doc.documentElement, { subtree: true, attributes: true, attributeFilter: ["contenteditable"] });
+    if (attached.size === 0) observer.disconnect();
+  });
+  observer.observe(doc.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["contenteditable"] });
 }
 
 export const HOST_TAG = "mermaid-render-block";
@@ -62,9 +74,8 @@ button:focus-visible { outline: 2px solid #7cb7ff; outline-offset: 2px; }
 
 /**
  * Inserts a Render Toggle before the block; the block's own elements are only hidden and shown (ADR 0003).
- * Returns a function that puts the block back in Code View and removes everything that was inserted.
  */
-function attach(doc: Document, block: MermaidBlock, renderer: Renderer): () => void {
+function attach(doc: Document, block: MermaidBlock, renderer: Renderer): Detach {
   const host = doc.createElement(HOST_TAG);
   const root = host.attachShadow({ mode: "open" });
   const style = doc.createElement("style");
