@@ -18,11 +18,26 @@ export const HOST_TAG = "mermaid-render-block";
 const STYLE = `
 :host { display: block; position: relative; }
 button {
-  position: absolute; top: calc(var(--mre-offset, 0px) + 4px); right: 4px; z-index: 2147483647;
-  font: 12px/1.4 system-ui, sans-serif; padding: 2px 8px; cursor: pointer;
-  border: 1px solid #8888; border-radius: 4px; background: Canvas; color: CanvasText;
-  opacity: 0; transition: opacity 0.1s;
+  position: absolute; top: calc(var(--mre-offset, 0px) + 6px); right: 6px; z-index: 2147483647;
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 500 13px/1 system-ui, sans-serif; letter-spacing: 0.01em; color: #fff;
+  padding: 5px 16px 5px 5px; cursor: pointer;
+  border: 1px solid #3d8bf033; border-radius: 999px;
+  background: linear-gradient(90deg, #16233d 0%, #1a4f8f 55%, #1f74d6 100%);
+  box-shadow: 0 2px 8px #0b1a3366, inset 0 1px 0 #ffffff1f;
+  opacity: 0; transition: opacity 0.1s, filter 0.1s, box-shadow 0.1s;
 }
+/* The icon: a ring with a plus to show the Diagram, or a minus to go back to the code. */
+button::before {
+  content: ""; flex: none; width: 18px; height: 18px; border: 1.5px solid #fff; border-radius: 50%;
+  background:
+    linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) center / 1.5px 8px no-repeat;
+}
+button[aria-pressed="true"]::before { background: linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat; }
+button:hover { filter: brightness(1.12); box-shadow: 0 3px 12px #0b1a3380, inset 0 1px 0 #ffffff26; }
+button:active { filter: brightness(0.95); }
+button:focus-visible { outline: 2px solid #7cb7ff; outline-offset: 2px; }
 :host([data-hover]) button, button:focus-visible, button[aria-pressed="true"] { opacity: 1; }
 .diagram:empty { display: none; }
 .diagram { padding: 8px 0; overflow: hidden; }

@@ -16,12 +16,12 @@ Written at the end of a cloud session, for continuing locally, starting with the
 ```sh
 npm ci
 npm run check   # typecheck + 109 tests + build
-npm start       # builds, then web-ext opens Firefox on test-pages/mermaid-blocks.html
+npm start       # builds, serves the repo over HTTP, then web-ext opens Firefox on test-pages/mermaid-blocks.html
 ```
 
 If the page shows **no toggles at all**:
 1. **Site access:** the extension may not have been granted access to all sites. Firefox MV3 treats host permissions as optional. Open `about:addons` → Mermaid Render → Permissions and allow access to all websites. Handling this properly in the popup is #13.
-2. **`file://` URLs:** content scripts may not be running on local files. Serve the page instead with `python3 -m http.server 8000` from the repo root, then open `http://localhost:8000/test-pages/mermaid-blocks.html`.
+2. **`file://` URLs:** content scripts may not run on local files, so `npm start` (`scripts/start.mjs`) serves the page over HTTP on a free port instead. If you open a test page by hand, use that `http://localhost:<port>/…` address.
 
 **What to check on the test page:**
 - [ ] Hovering over a block shows a "Show diagram" button in its top-right corner. Tab reaches it, and Enter or Space activates it.
