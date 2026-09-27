@@ -1,4 +1,8 @@
-/** Every piece of user-facing text, kept in one place for later translation. */
+/**
+ * Every piece of user-facing text, kept in one place for later translation. The one exception is the
+ * extension's name in manifest.json, which the browser shows as the toolbar button's tooltip; it moves
+ * to _locales when the extension is translated.
+ */
 export const strings = {
   showDiagram: "Show diagram",
   showCode: "Show code",
@@ -21,6 +25,7 @@ export const strings = {
   manyBlocks: "{count} Mermaid blocks on this page.",
   renderAll: "Render all",
   showAllCode: "Show all code",
-  restrictedPage: "Mermaid Render can't run on this page. Browser pages and add-on stores are off limits to extensions.",
-  reloadPage: "Mermaid Render isn't running on this page yet. Reload the page to use it.",
+  restrictedPage: "Mermaid Render can't run on this page. Browser pages and add-on stores are off limits to extensions, and the extension may not be allowed on this site.",
+  notRunningHere: "Mermaid Render isn't running on this page. If the page is still loading, or was open before the extension was installed or updated, reload it.",
+  siteDisabled: "Mermaid Render is turned off for this site.",
 } as const;

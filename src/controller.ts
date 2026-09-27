@@ -1,6 +1,8 @@
+import type { BlockView } from "./block-view";
 import { findMermaidBlocks, type MermaidBlock } from "./detector";
 import { isInEditingSurface } from "./editing-surfaces";
 import type { RenderOptions, Renderer, RenderResult, Settings, Theme } from "./ports";
+import { SET_ALL_VIEWS, type PopupMessage, type PopupReply } from "./messages";
 import { strings } from "./strings";
 import { BUTTON_STYLE, iconButton } from "./buttons";
 import { openViewer, VIEWER_TAG, type OpenViewer } from "./viewer";
@@ -12,10 +14,9 @@ export interface Ports {
   settings: Settings;
 }
 
-/** A block's Block View: its Diagram, or the page's original code. */
-export type BlockView = "diagram" | "code";
-
 export interface Mounted {
+  /** Whether the page's site is a Disabled Site, so nothing was mounted. */
+  readonly siteDisabled: boolean;
   /** How many Mermaid Blocks the page has right now. */
   blockCount(): number;
   /** A Bulk Action: switches every block to `view`, leaving blocks already there alone. */
@@ -25,7 +26,13 @@ export interface Mounted {
 }
 
 /** What mounting gives on a Disabled Site: no blocks, and nothing to do. */
-const NOTHING_MOUNTED: Mounted = { blockCount: () => 0, setAllViews() {}, unmount() {} };
+const NOTHING_MOUNTED: Mounted = { siteDisabled: true, blockCount: () => 0, setAllViews() {}, unmount() {} };
+
+/** The page's answer to a message from the popup, applying any Bulk Action first. */
+export function answerPopup(mounted: Mounted, message: PopupMessage): PopupReply {
+  if (message.type === SET_ALL_VIEWS) mounted.setAllViews(message.view);
+  return { count: mounted.blockCount(), siteDisabled: mounted.siteDisabled };
+}
 
 /** Page changes are gathered for this long before the page is scanned again, so a stream of changes causes few rescans and redraws. */
 export const RESCAN_DELAY_MS = 150;
@@ -101,6 +108,7 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
   });
 
   return {
+    siteDisabled: false,
     blockCount: () => attached.size,
     setAllViews(view) {
       for (const block of attached.values()) block.setView(view);

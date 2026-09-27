@@ -1,4 +1,4 @@
-import { LOAD_MERMAID } from "./messages";
+import { LOAD_MERMAID, type LoadMermaidReply } from "./messages";
 
 // Answered with sendResponse and `return true` rather than a returned Promise, which Chrome's MV3 doesn't support (ADR 0001).
 browser.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
@@ -7,8 +7,8 @@ browser.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =
   browser.scripting
     .executeScript({ target: { tabId, frameIds: [sender.frameId ?? 0] }, files: ["mermaid.js"] })
     .then(
-      () => sendResponse(true),
-      (error: unknown) => sendResponse({ error: String(error) }),
+      () => sendResponse(true satisfies LoadMermaidReply),
+      (error: unknown) => sendResponse({ error: String(error) } satisfies LoadMermaidReply),
     );
   return true;
 });

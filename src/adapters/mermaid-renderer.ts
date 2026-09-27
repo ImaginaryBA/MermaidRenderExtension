@@ -1,5 +1,5 @@
 import type { RenderOptions, Renderer, RenderResult } from "../ports";
-import { LOAD_MERMAID } from "../messages";
+import { LOAD_MERMAID, type LoadMermaidReply } from "../messages";
 
 declare global {
   /** Set by the Mermaid bundle once the background script has injected it into this content script's world. */
@@ -11,13 +11,13 @@ declare global {
  * injected into the page the first time a block is rendered.
  */
 export function mermaidRenderer(): Renderer {
-  let loading: Promise<unknown> | undefined;
+  let loading: Promise<LoadMermaidReply> | undefined;
   return {
     async render(source, options) {
       try {
         loading ??= browser.runtime.sendMessage({ type: LOAD_MERMAID });
-        const reply = (await loading) as { error?: string } | undefined;
-        if (reply?.error) throw new Error(reply.error);
+        const reply = await loading;
+        if (reply !== true) throw new Error(reply?.error ?? "no answer from the background script");
       } catch (error) {
         loading = undefined;
         return { ok: false, message: `Mermaid failed to load: ${String(error)}` };

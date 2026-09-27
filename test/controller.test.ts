@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
+import { answerPopup, ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
 import { WORKSPACE_TAG } from "../src/workspace";
-import { answerPopup, GET_BLOCK_COUNT, SET_ALL_VIEWS } from "../src/messages";
+import { GET_BLOCK_COUNT, isPopupMessage, SET_ALL_VIEWS } from "../src/messages";
 import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, viewer, viewerButton, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
 import { strings } from "../src/strings";
 
@@ -829,7 +829,7 @@ describe("Bulk Actions and the popup's questions", () => {
   test("the controller answers a count query with the number of Mermaid Blocks on the page", async () => {
     const mounted = await mountPage(THREE);
 
-    expect(answerPopup(mounted, { type: GET_BLOCK_COUNT })).toEqual({ count: 3 });
+    expect(answerPopup(mounted, { type: GET_BLOCK_COUNT })).toEqual({ count: 3, siteDisabled: false });
   });
 
   test("the count follows blocks added after mount", async () => {
@@ -837,14 +837,14 @@ describe("Bulk Actions and the popup's questions", () => {
 
     document.body.insertAdjacentHTML("beforeend", "<pre>graph TD; late</pre>");
 
-    await waitFor(() => expect(answerPopup(mounted, { type: GET_BLOCK_COUNT })).toEqual({ count: 2 }));
+    await waitFor(() => expect(answerPopup(mounted, { type: GET_BLOCK_COUNT }).count).toBe(2));
   });
 
   test("Render all switches every block to Diagram View", async () => {
     const renderer = fakeRenderer();
     const mounted = await mountPage(THREE, { renderer });
 
-    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" })).toEqual({ count: 3 });
+    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" }).count).toBe(3);
 
     expect(pressed()).toEqual(["true", "true", "true"]);
     await waitFor(() => expect([diagram(0), diagram(1), diagram(2)].every(Boolean)).toBe(true));
@@ -876,19 +876,19 @@ describe("Bulk Actions and the popup's questions", () => {
     expect(document.body.innerHTML).toBe(before);
   });
 
-  test("a Disabled Site answers with no blocks, and Bulk Actions do nothing", async () => {
+  test("a Disabled Site says so, and Bulk Actions do nothing there", async () => {
     const renderer = fakeRenderer();
     const mounted = await mountPage(THREE, { renderer, settings: fakeSettings({ disabled: true }) });
 
-    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" })).toEqual({ count: 0 });
+    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "diagram" })).toEqual({ count: 0, siteDisabled: true });
     expect(renderer.calls).toEqual([]);
   });
 
-  test("messages that aren't the popup's get no answer", async () => {
-    const mounted = await mountPage(MARKED);
-
-    expect(answerPopup(mounted, { type: "something-else" })).toBeUndefined();
-    expect(answerPopup(mounted, null)).toBeUndefined();
-    expect(answerPopup(mounted, { type: SET_ALL_VIEWS, view: "sideways" })).toBeUndefined();
+  test("only the popup's own messages are recognised as such", () => {
+    expect(isPopupMessage({ type: GET_BLOCK_COUNT })).toBe(true);
+    expect(isPopupMessage({ type: SET_ALL_VIEWS, view: "code" })).toBe(true);
+    expect(isPopupMessage({ type: "something-else" })).toBe(false);
+    expect(isPopupMessage(null)).toBe(false);
+    expect(isPopupMessage({ type: SET_ALL_VIEWS, view: "sideways" })).toBe(false);
   });
 });

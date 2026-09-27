@@ -1,5 +1,5 @@
 import { BUTTON_STYLE } from "./buttons";
-import type { BlockView } from "./controller";
+import type { BlockView } from "./block-view";
 import { GET_BLOCK_COUNT, SET_ALL_VIEWS, type PopupMessage, type PopupReply } from "./messages";
 import { strings } from "./strings";
 
@@ -18,6 +18,7 @@ p { margin: 0; }
 .actions button { flex: 1; padding: 8px 12px; }
 `;
 
+document.title = strings.popupTitle;
 const style = document.createElement("style");
 style.textContent = STYLE;
 const title = document.createElement("h1");
@@ -31,9 +32,14 @@ void showTab();
 
 async function showTab(): Promise<void> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  const reply = tab?.id === undefined ? undefined : await ask(tab.id, { type: GET_BLOCK_COUNT });
-  if (!reply) {
-    status.textContent = canRunOn(tab?.url) ? strings.reloadPage : strings.restrictedPage;
+  const tabId = tab?.id;
+  const reply = tabId === undefined ? undefined : await ask(tabId, { type: GET_BLOCK_COUNT });
+  if (tabId === undefined || !reply) {
+    status.textContent = isWebPage(tab?.url) ? strings.notRunningHere : strings.restrictedPage;
+    return;
+  }
+  if (reply.siteDisabled) {
+    status.textContent = strings.siteDisabled;
     return;
   }
   showCount(reply.count);
@@ -46,7 +52,7 @@ async function showTab(): Promise<void> {
     button.type = "button";
     button.textContent = label;
     button.addEventListener("click", async () => {
-      const after = await ask(tab.id!, { type: SET_ALL_VIEWS, view });
+      const after = await ask(tabId, { type: SET_ALL_VIEWS, view });
       if (after) showCount(after.count);
     });
     return button;
@@ -68,14 +74,16 @@ async function ask(tabId: number, message: PopupMessage): Promise<PopupReply | u
   }
 }
 
+/** Add-on stores, where browsers never let extensions run. */
+const ADD_ON_STORES = ["addons.mozilla.org", "chromewebstore.google.com", "chrome.google.com", "microsoftedge.microsoft.com"];
+
 /**
- * Whether the extension's content script runs on pages like this one, so a page without it just needs
- * reloading. Browser pages, add-on stores and the like are off limits; their URL is also hidden from
- * the extension, so an unknown URL counts as off limits too.
+ * Whether this looks like an ordinary web page, where the content script normally runs. Browser pages
+ * and add-on stores are off limits; the extension can't even see the URL of a page it may not access,
+ * so an unknown URL counts as off limits too.
  */
-function canRunOn(url: string | undefined): boolean {
+function isWebPage(url: string | undefined): boolean {
   if (!url) return false;
   const { protocol, hostname } = new URL(url);
-  const stores = ["addons.mozilla.org", "chromewebstore.google.com"];
-  return ["http:", "https:", "file:"].includes(protocol) && !stores.includes(hostname);
+  return ["http:", "https:", "file:"].includes(protocol) && !ADD_ON_STORES.includes(hostname);
 }
