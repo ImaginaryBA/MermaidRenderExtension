@@ -17,17 +17,20 @@ export const ZOOM_STYLE = `
     linear-gradient(#fff, #fff) center / 1.5px 8px no-repeat;
 }
 .zoom-out::before { background: linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat; }
-/* Fit: four corner brackets, the usual "fit to frame" symbol. Positions are within the ring's 15px inner box. */
+/* Fit: four corner brackets, the usual "fit to frame" symbol. They're anchored to the corners of a
+   centred 8px box (the ring's content box), so rounding can never push them off-centre. */
 .zoom-fit::before {
+  padding: 3.5px;
   background:
-    linear-gradient(#fff, #fff) 3.5px 3.5px / 3px 1.5px no-repeat,
-    linear-gradient(#fff, #fff) 3.5px 3.5px / 1.5px 3px no-repeat,
-    linear-gradient(#fff, #fff) 8.5px 3.5px / 3px 1.5px no-repeat,
-    linear-gradient(#fff, #fff) 10px 3.5px / 1.5px 3px no-repeat,
-    linear-gradient(#fff, #fff) 3.5px 10px / 3px 1.5px no-repeat,
-    linear-gradient(#fff, #fff) 3.5px 8.5px / 1.5px 3px no-repeat,
-    linear-gradient(#fff, #fff) 8.5px 10px / 3px 1.5px no-repeat,
-    linear-gradient(#fff, #fff) 10px 8.5px / 1.5px 3px no-repeat;
+    linear-gradient(#fff, #fff) left top / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) left top / 1.5px 3px no-repeat,
+    linear-gradient(#fff, #fff) right top / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) right top / 1.5px 3px no-repeat,
+    linear-gradient(#fff, #fff) left bottom / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) left bottom / 1.5px 3px no-repeat,
+    linear-gradient(#fff, #fff) right bottom / 3px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) right bottom / 1.5px 3px no-repeat;
+  background-origin: content-box;
 }
 .zoom[aria-disabled="true"] { cursor: default; filter: saturate(0.4); }
 .zoomed { cursor: grab; touch-action: none; user-select: none; }
