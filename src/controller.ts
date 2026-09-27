@@ -1,7 +1,9 @@
 import { findMermaidBlocks, type MermaidBlock } from "./detector";
 import { isInEditingSurface } from "./editing-surfaces";
-import type { Renderer, RenderResult, Settings } from "./ports";
+import type { RenderOptions, Renderer, RenderResult, Settings } from "./ports";
 import { strings } from "./strings";
+import { WORKSPACE_TAG } from "./workspace";
+import { inlineZoom, ZOOM_STYLE } from "./zoom";
 
 export interface Ports {
   renderer: Renderer;
@@ -51,7 +53,11 @@ export async function mount(doc: Document, { renderer, settings }: Ports): Promi
 
   /** Whether a page change is only the extension inserting, moving or removing its own elements. */
   const isOwnChange = (record: MutationRecord): boolean => {
+    // Mermaid draws in the render workspace, adding and removing elements with every Diagram.
+    const target = record.target instanceof Element ? record.target : record.target.parentElement;
+    if (target?.closest(WORKSPACE_TAG)) return true;
     if (record.type !== "childList") return false;
+    if ([...record.addedNodes, ...record.removedNodes].every((n) => n instanceof Element && n.localName === WORKSPACE_TAG)) return true;
     if (![...record.addedNodes, ...record.removedNodes].every((n) => n instanceof Element && n.localName === HOST_TAG)) return false;
     // The extension only removes a block's elements once the block is gone, or moves them (so they're
     // still connected). A block that's still attached but whose elements left the page lost them to the page.
@@ -119,36 +125,46 @@ export const HOST_TAG = "mermaid-render-block";
 
 const STYLE = `
 :host { display: block; position: relative; }
-button {
+[hidden] { display: none !important; }
+.controls {
   position: absolute; top: calc(var(--mre-offset, 0px) + 6px); right: 6px; z-index: 2147483647;
-  display: inline-flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
   font: 500 13px/1 system-ui, sans-serif; letter-spacing: 0.01em; color: #fff;
-  padding: 5px 16px 5px 5px; cursor: pointer;
   border: 1px solid #3d8bf033; border-radius: 999px;
   background: linear-gradient(90deg, #16233d 0%, #1a4f8f 55%, #1f74d6 100%);
   box-shadow: 0 2px 8px #0b1a3366, inset 0 1px 0 #ffffff1f;
   opacity: 0; transition: opacity 0.1s, filter 0.1s, box-shadow 0.1s;
 }
-/* The icon: a ring with a plus to show the Diagram, or a minus to go back to the code. */
-button::before {
-  content: ""; flex: none; width: 18px; height: 18px; border: 1.5px solid #fff; border-radius: 50%;
+.toggle { padding: 5px 16px 5px 5px; }
+/* Icons are drawn in CSS so each button's text is exactly its label. */
+.toggle::before, .zoom::before {
+  content: ""; flex: none; width: 18px; height: 18px; border: 1.5px solid #fff; border-radius: 50%; box-sizing: border-box;
+}
+.toggle::before {
   background:
     linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat,
     linear-gradient(#fff, #fff) center / 1.5px 8px no-repeat;
 }
-button[aria-pressed="true"]::before { background: linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat; }
-button:hover { filter: brightness(1.12); box-shadow: 0 3px 12px #0b1a3380, inset 0 1px 0 #ffffff26; }
-button:active { filter: brightness(0.95); }
+.toggle[aria-pressed="true"]::before { background: linear-gradient(#fff, #fff) center / 8px 1.5px no-repeat; }
+button:hover:not([aria-disabled="true"]) { filter: brightness(1.12); box-shadow: 0 3px 12px #0b1a3380, inset 0 1px 0 #ffffff26; }
+button:active:not([aria-disabled="true"]) { filter: brightness(0.95); }
 button:focus-visible { outline: 2px solid #7cb7ff; outline-offset: 2px; }
-:host([data-hover]) button, button:focus-visible, button[aria-pressed="true"] { opacity: 1; }
+:host([data-hover]) button, .controls:focus-within button, .toggle[aria-pressed="true"], .zoom { opacity: 1; }
 .diagram:empty { display: none; }
-.diagram { padding: 8px 0; overflow: hidden; }
+/* The frame: its size is set by the fitted Diagram, and a zoomed Diagram is clipped to it. */
+.diagram { overflow: hidden; border-radius: 8px; }
+.diagram[data-theme="dark"] { background: #1b1d23; }
+.canvas { padding: 8px 0; }
 .error { font: 13px/1.4 system-ui, sans-serif; border-left: 3px solid #d33; padding: 4px 8px; }
 .error p { margin: 0 0 4px; }
 .error summary { cursor: pointer; }
 .error pre { white-space: pre-wrap; font: 12px/1.4 ui-monospace, monospace; margin: 4px 0 0; }
-.diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
-`;
+/* Fitted to the block's width, but never enlarged beyond the Diagram's natural size. */
+.canvas svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+${ZOOM_STYLE}`;
 
 /**
  * Inserts a Render Toggle before the block; the block's own elements are only hidden and shown (ADR 0003).
@@ -161,9 +177,14 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
   style.textContent = STYLE;
   const toggle = doc.createElement("button");
   toggle.type = "button";
+  toggle.className = "toggle";
   const diagram = doc.createElement("div");
   diagram.className = "diagram";
-  root.append(style, toggle, diagram);
+  const zoom = inlineZoom(doc, diagram);
+  const controls = doc.createElement("div");
+  controls.className = "controls";
+  controls.append(...zoom.buttons, toggle);
+  root.append(style, controls, diagram);
   block.elements[0].before(host);
 
   const hidden = new Map<Element, string | null>();
@@ -188,6 +209,8 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
   const showCode = () => {
     ++generation;
     diagram.replaceChildren();
+    zoom.setCanvas(null);
+    zoom.fit();
     for (const [el, style] of hidden) restoreStyle(el, style);
     hidden.clear();
   };
@@ -197,12 +220,22 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
     const drawn = block;
     // A redraw keeps the previous Diagram on screen until the new one is ready.
     if (!diagram.hasChildNodes()) diagram.textContent = strings.rendering;
-    const result = await renderSafely(renderer, drawn.repairedSource);
+    const theme = prefersDark(doc) ? "dark" : "default";
+    const result = await renderSafely(renderer, drawn.repairedSource, { theme });
     const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
-    if (svg) return diagram.replaceChildren(svg);
+    if (svg) {
+      const canvas = doc.createElement("div");
+      canvas.className = "canvas";
+      canvas.append(svg);
+      diagram.dataset.theme = theme;
+      diagram.replaceChildren(canvas);
+      return zoom.setCanvas(canvas);
+    }
     const showError = () => {
       if (current !== generation) return;
+      zoom.setCanvas(null);
+      zoom.fit();
       diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, drawn.repairedSource !== drawn.source));
     };
     // A source that's still streaming is often briefly invalid, so keep the last good Diagram and only
@@ -295,9 +328,14 @@ function renderErrorView(doc: Document, message: string, repaired: boolean): HTM
   return error;
 }
 
-async function renderSafely(renderer: Renderer, source: string): Promise<RenderResult> {
+/** Whether the browser asks for a dark colour scheme, which Diagrams are then drawn to match. */
+function prefersDark(doc: Document): boolean {
+  return doc.defaultView?.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
+async function renderSafely(renderer: Renderer, source: string, options: RenderOptions): Promise<RenderResult> {
   try {
-    return await renderer.render(source);
+    return await renderer.render(source, options);
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }

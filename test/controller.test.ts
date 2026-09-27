@@ -1,7 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { ERROR_SETTLE_MS, HOST_TAG } from "../src/controller";
 import type { RenderResult } from "../src/ports";
-import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor } from "./page";
+import { WORKSPACE_TAG } from "../src/workspace";
+import { diagram, renderError, fakeRenderer, fakeSettings, hosts, isHidden, mountPage, settle, toggles, waitFor, zoomButtons, zoomLevel, zoomState } from "./page";
 
 const MARKED = `<p>Intro</p><pre id="code"><code class="language-mermaid">graph TD; A-->B</code></pre><p>Outro</p>`;
 
@@ -54,9 +55,9 @@ describe("Render Toggle", () => {
     let finish!: () => void;
     const slow = fakeRenderer();
     const render = slow.render;
-    slow.render = async (source) => {
+    slow.render = async (source, options) => {
       await new Promise<void>((resolve) => (finish = resolve));
-      return render(source);
+      return render(source, options);
     };
     await mountPage(MARKED, { renderer: slow });
 
@@ -247,7 +248,7 @@ describe("Editing Surfaces", () => {
 
   test("a block still rendering when its region becomes editable never shows the Diagram", async () => {
     let finish!: (result: RenderResult) => void;
-    const renderer = { calls: [], render: () => new Promise<RenderResult>((done) => (finish = done)) };
+    const renderer = { calls: [], themes: [], render: () => new Promise<RenderResult>((done) => (finish = done)) };
     await mountPage(`<div id="region">${MARKED}</div>`, { renderer });
     toggles()[0].click();
 
@@ -440,5 +441,189 @@ describe("Dynamic pages: redrawing while the source changes", () => {
 
     await waitFor(() => expect(renderError()?.detail).toBe("Parse error"), ERROR_SETTLE_MS + 1000);
     expect(diagram()).toBeNull();
+  });
+});
+
+describe("Diagram presentation", () => {
+  const showDiagram = async () => {
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+  };
+  const colourScheme = (dark: boolean) => {
+    window.matchMedia = ((query: string) => ({ matches: dark && query.includes("dark") })) as typeof window.matchMedia;
+  };
+  afterEach(() => {
+    delete (window as Partial<Window>).matchMedia;
+  });
+
+  test("the Diagram is drawn inside a shadow root, out of reach of the page's CSS", async () => {
+    await mountPage(`<style>svg { display: none }</style>${MARKED}`);
+    await showDiagram();
+
+    const root = diagram()!.getRootNode();
+    expect(root).toBeInstanceOf(ShadowRoot);
+    expect((root as ShadowRoot).host.localName).toBe(HOST_TAG);
+  });
+
+  test.each([
+    [true, "dark"],
+    [false, "default"],
+  ])("with a dark colour scheme %s, the renderer is asked for the %s theme", async (dark, theme) => {
+    colourScheme(dark);
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+
+    await showDiagram();
+
+    expect(renderer.themes).toEqual([theme]);
+  });
+
+  test("without a way to read the colour scheme, the default theme is used", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+
+    await showDiagram();
+
+    expect(renderer.themes).toEqual(["default"]);
+  });
+
+  test("the zoom buttons zoom in and out, and fit returns to fitted", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    const { zoomIn, zoomOut, fit } = zoomButtons();
+    expect(zoomLevel()).toBe(1);
+
+    zoomIn.click();
+    const once = zoomLevel();
+    zoomIn.click();
+    expect(once).toBeGreaterThan(1);
+    expect(zoomLevel()).toBeGreaterThan(once);
+    zoomOut.click();
+    expect(zoomLevel()).toBeCloseTo(once);
+    fit.click();
+    expect(zoomLevel()).toBe(1);
+  });
+
+  test("zooming out stops at fitted, where zoom out and fit are marked unavailable but stay focusable", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    const { zoomIn, zoomOut, fit } = zoomButtons();
+
+    const unavailable = () => [zoomOut, fit].map((b) => b.getAttribute("aria-disabled"));
+    expect(unavailable()).toEqual(["true", "true"]);
+    zoomOut.click();
+    expect(zoomLevel()).toBe(1);
+    zoomIn.click();
+    expect(unavailable()).toEqual(["false", "false"]);
+
+    zoomOut.focus();
+    zoomOut.click();
+    expect(zoomOut.disabled).toBe(false);
+    expect(hosts()[0].shadowRoot!.activeElement).toBe(zoomOut);
+  });
+
+  test("Ctrl+wheel over the Diagram zooms; a plain wheel is left to scroll the page", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    const wheel = (ctrlKey: boolean) => {
+      const event = new WheelEvent("wheel", { deltaY: -100, ctrlKey, bubbles: true, cancelable: true, composed: true });
+      diagram()!.dispatchEvent(event);
+      return event;
+    };
+
+    const plain = wheel(false);
+    expect([plain.defaultPrevented, zoomLevel()]).toEqual([false, 1]);
+    const ctrl = wheel(true);
+    expect(ctrl.defaultPrevented).toBe(true);
+    expect(zoomLevel()).toBeGreaterThan(1);
+  });
+
+  test("the zoom buttons are labelled buttons, shown only while a Diagram is", async () => {
+    await mountPage(MARKED);
+    const buttons = () => Object.values(zoomButtons());
+
+    expect(buttons().every((b) => b.tagName === "BUTTON" && b.hidden)).toBe(true);
+    await showDiagram();
+    expect(buttons().every((b) => !b.hidden)).toBe(true);
+    toggles()[0].click();
+    expect(buttons().every((b) => b.hidden)).toBe(true);
+  });
+
+  test("going back to Code View and to the Diagram again starts fitted", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    zoomButtons().zoomIn.click();
+
+    toggles()[0].click();
+    await showDiagram();
+
+    expect(zoomLevel()).toBe(1);
+  });
+});
+
+describe("Diagram presentation: zoom details", () => {
+  const showDiagram = async () => {
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()).not.toBeNull());
+  };
+  const frame = () => diagram()!.parentElement!.parentElement!;
+  const ctrlWheel = (deltaY: number) =>
+    diagram()!.dispatchEvent(new WheelEvent("wheel", { deltaY, ctrlKey: true, bubbles: true, cancelable: true, composed: true }));
+
+  test("a small Ctrl+wheel step, like a trackpad pinch, zooms a little; a sideways wheel doesn't zoom", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+
+    ctrlWheel(0);
+    expect(zoomLevel()).toBe(1);
+    ctrlWheel(-4);
+    expect(zoomLevel()).toBeGreaterThan(1);
+    expect(zoomLevel()).toBeLessThan(1.05);
+  });
+
+  test("when zoomed in, the frame can be focused and its arrow keys are taken for panning", async () => {
+    await mountPage(MARKED);
+    await showDiagram();
+    expect(frame().tabIndex).toBe(-1);
+
+    zoomButtons().zoomIn.click();
+    expect(frame().tabIndex).toBe(0);
+    const key = new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true });
+    frame().dispatchEvent(key);
+
+    // jsdom has no layout, so the canvas measures 0 and the pan itself is clamped away; the key is still handled.
+    expect(key.defaultPrevented).toBe(true);
+    expect(zoomState().scale).toBeGreaterThan(1);
+  });
+
+  test("a Render Error resets the zoom, so the next Diagram starts fitted", async () => {
+    const renderer = fakeRenderer((source) =>
+      /-->\s*$/.test(source) ? { ok: false, message: "Parse error" } : { ok: true, svg: `<svg><text>${source}</text></svg>` },
+    );
+    await mountPage(MARKED, { renderer });
+    await showDiagram();
+    zoomButtons().zoomIn.click();
+    const code = document.getElementById("code")!.querySelector("code")!;
+
+    code.textContent = "graph TD; A-->";
+    await waitFor(() => expect(renderError()).not.toBeNull(), ERROR_SETTLE_MS + 1000);
+    code.textContent = "graph TD; A-->C";
+
+    await waitFor(() => expect(diagram()?.textContent).toBe("graph TD; A-->C"));
+    expect(zoomLevel()).toBe(1);
+  });
+});
+
+describe("Mermaid's render workspace", () => {
+  test("changes inside the workspace Mermaid draws in never add toggles or trigger rescans", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+
+    const workspace = document.createElement(WORKSPACE_TAG);
+    document.body.append(workspace);
+    workspace.innerHTML = `<pre><code class="language-mermaid">graph TD; temp</code></pre>`;
+    await settle();
+
+    expect(toggles()).toHaveLength(1);
   });
 });
