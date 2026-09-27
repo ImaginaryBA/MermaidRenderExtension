@@ -8,33 +8,91 @@ export interface Ports {
   settings: Settings;
 }
 
-/** Finds the Mermaid Blocks on the page and gives each one a Render Toggle. */
-export async function mount(doc: Document, { renderer, settings }: Ports): Promise<void> {
-  if (await settings.isSiteDisabled(doc.location.hostname)) return;
-  const attached = new Map<MermaidBlock, Detach>();
-  for (const block of findMermaidBlocks(doc.body)) attached.set(block, attach(doc, block, renderer));
-  detachWhenEditable(doc, attached);
+export interface Mounted {
+  /** Stops watching the page and puts every block back as the page had it. */
+  unmount(): void;
 }
 
-/** Puts a block back in Code View and removes everything the extension inserted for it. */
-type Detach = () => void;
+/** Page changes are gathered for this long before the page is scanned again, so a stream of changes causes few rescans and redraws. */
+export const RESCAN_DELAY_MS = 150;
 
 /**
- * Detaches any block that ends up inside an Editing Surface, whether its region becomes editable
- * (say, a wiki switching to edit mode) or it is moved into an editor, so the editor can't save
- * anything the extension inserted or hid. A switch to design mode isn't observable, so it's not caught.
+ * Finds the Mermaid Blocks on the page and gives each one a Render Toggle, then keeps watching:
+ * blocks added later get a toggle, blocks in Diagram View redraw when their source changes, and
+ * blocks that are removed, stop being Mermaid or end up in an Editing Surface lose their toggle.
  */
-function detachWhenEditable(doc: Document, attached: Map<MermaidBlock, Detach>): void {
-  if (attached.size === 0) return;
-  const observer = new MutationObserver(() => {
-    for (const [block, detach] of attached) {
-      if (!isInEditingSurface(block.elements[0])) continue;
-      detach();
-      attached.delete(block);
+export async function mount(doc: Document, { renderer, settings }: Ports): Promise<Mounted> {
+  if (await settings.isSiteDisabled(doc.location.hostname)) return { unmount() {} };
+  // Keyed by the block's first element, which stays the same while a block's source changes.
+  const attached = new Map<Element, AttachedBlock>();
+
+  const rescan = () => {
+    const found = new Set<Element>();
+    for (const block of findMermaidBlocks(doc.body)) {
+      const key = block.elements[0];
+      found.add(key);
+      const existing = attached.get(key);
+      if (existing) existing.update(block);
+      else attached.set(key, attach(doc, block, renderer));
     }
-    if (attached.size === 0) observer.disconnect();
+    for (const [key, block] of attached) {
+      if (found.has(key)) continue;
+      block.detach();
+      attached.delete(key);
+    }
+  };
+
+  // Nothing the extension inserted or hid may stay in an Editing Surface, even for the rescan delay,
+  // or an editor could save it. A switch to design mode isn't observable, so it's not caught.
+  const detachEditable = () => {
+    for (const [key, block] of attached) {
+      if (!isInEditingSurface(key)) continue;
+      block.detach();
+      attached.delete(key);
+    }
+  };
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const observer = new MutationObserver((records) => {
+    if (records.every(isOwnInsertion)) return;
+    detachEditable();
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      rescan();
+    }, RESCAN_DELAY_MS);
   });
-  observer.observe(doc.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["contenteditable"] });
+
+  rescan();
+  observer.observe(doc.documentElement, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true,
+    // Attributes that can make a block, stop one being a block, or make its region editable.
+    attributeFilter: ["contenteditable", "class", "lang", "data-lang"],
+  });
+
+  return {
+    unmount() {
+      observer.disconnect();
+      clearTimeout(timer);
+      for (const block of attached.values()) block.detach();
+      attached.clear();
+    },
+  };
+}
+
+/** Whether a page change is only the extension adding, moving or removing its own toggles. */
+function isOwnInsertion(record: MutationRecord): boolean {
+  if (record.type !== "childList") return false;
+  return [...record.addedNodes, ...record.removedNodes].every((n) => n instanceof Element && n.localName === HOST_TAG);
+}
+
+interface AttachedBlock {
+  /** Takes the block as it's now found on the page, redrawing it if it's in Diagram View and its source changed. */
+  update(block: MermaidBlock): void;
+  /** Puts the block back in Code View and removes everything the extension inserted for it. */
+  detach(): void;
 }
 
 export const HOST_TAG = "mermaid-render-block";
@@ -75,7 +133,8 @@ button:focus-visible { outline: 2px solid #7cb7ff; outline-offset: 2px; }
 /**
  * Inserts a Render Toggle before the block; the block's own elements are only hidden and shown (ADR 0003).
  */
-function attach(doc: Document, block: MermaidBlock, renderer: Renderer): Detach {
+function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): AttachedBlock {
+  let block = initial;
   const host = doc.createElement(HOST_TAG);
   const root = host.attachShadow({ mode: "open" });
   const style = doc.createElement("style");
@@ -89,6 +148,7 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): Detach 
 
   const hidden = new Map<Element, string | null>();
   let showingDiagram = false;
+  // Bumped whenever a render's result stops being wanted, so a slower, older render never wins.
   let generation = 0;
 
   const setPressed = (pressed: boolean) => {
@@ -97,54 +157,84 @@ function attach(doc: Document, block: MermaidBlock, renderer: Renderer): Detach 
   };
   setPressed(false);
 
+  const hideCode = () => {
+    for (const el of block.elements) {
+      if (hidden.has(el)) continue;
+      hidden.set(el, el.getAttribute("style"));
+      (el as HTMLElement).style.setProperty("display", "none", "important");
+    }
+  };
+
   const showCode = () => {
+    ++generation;
     diagram.replaceChildren();
     for (const [el, style] of hidden) restoreStyle(el, style);
     hidden.clear();
   };
 
-  toggle.addEventListener("click", async () => {
-    showingDiagram = !showingDiagram;
+  const draw = async () => {
     const current = ++generation;
-    setPressed(showingDiagram);
-    if (!showingDiagram) return showCode();
-    for (const el of block.elements) {
-      hidden.set(el, el.getAttribute("style"));
-      (el as HTMLElement).style.setProperty("display", "none", "important");
-    }
-    diagram.textContent = strings.rendering;
-    const result = await renderSafely(renderer, block.repairedSource);
+    const drawn = block;
+    // A redraw keeps the previous Diagram on screen until the new one is ready.
+    if (!diagram.hasChildNodes()) diagram.textContent = strings.rendering;
+    const result = await renderSafely(renderer, drawn.repairedSource);
     const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
     if (svg) diagram.replaceChildren(svg);
-    else diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, block.repairedSource !== block.source));
+    else diagram.replaceChildren(renderErrorView(doc, result.ok ? strings.notSvg : result.message, drawn.repairedSource !== drawn.source));
+  };
+
+  toggle.addEventListener("click", () => {
+    showingDiagram = !showingDiagram;
+    setPressed(showingDiagram);
+    if (!showingDiagram) return showCode();
+    hideCode();
+    void draw();
   });
 
-  const first = block.elements[0];
   const hover = (on: boolean) => () => {
     // Line the toggle up with the block's top edge, wherever margin collapsing has put the host.
     if (on) {
-      const offset = first.getBoundingClientRect().top - host.getBoundingClientRect().top;
+      const offset = block.elements[0].getBoundingClientRect().top - host.getBoundingClientRect().top;
       host.style.setProperty("--mre-offset", `${Math.max(0, offset)}px`);
     }
     host.toggleAttribute("data-hover", on);
   };
   const hoverOn = hover(true);
   const hoverOff = hover(false);
-  for (const el of [host, ...block.elements]) {
-    el.addEventListener("mouseenter", hoverOn);
-    el.addEventListener("mouseleave", hoverOff);
-  }
-
-  return () => {
-    // A render still in flight sees a newer generation and discards its result.
-    ++generation;
-    showCode();
-    for (const el of block.elements) {
-      el.removeEventListener("mouseenter", hoverOn);
-      el.removeEventListener("mouseleave", hoverOff);
+  const listen = (els: Element[], on: boolean) => {
+    for (const el of els) {
+      const method = on ? "addEventListener" : "removeEventListener";
+      el[method]("mouseenter", hoverOn);
+      el[method]("mouseleave", hoverOff);
     }
-    host.remove();
+  };
+  listen([host, ...block.elements], true);
+
+  return {
+    update(next) {
+      const sourceChanged = next.source !== block.source;
+      const gone = block.elements.filter((el) => !next.elements.includes(el));
+      const added = next.elements.filter((el) => !block.elements.includes(el));
+      if (!sourceChanged && gone.length === 0 && added.length === 0) return;
+      block = next;
+      listen(gone, false);
+      listen(added, true);
+      for (const el of gone) {
+        if (!hidden.has(el)) continue;
+        restoreStyle(el, hidden.get(el)!);
+        hidden.delete(el);
+      }
+      if (host.nextElementSibling !== block.elements[0]) block.elements[0].before(host);
+      if (!showingDiagram) return;
+      hideCode();
+      if (sourceChanged) void draw();
+    },
+    detach() {
+      showCode();
+      listen(block.elements, false);
+      host.remove();
+    },
   };
 }
 

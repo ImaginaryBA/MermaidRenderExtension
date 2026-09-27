@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic Pages</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2em auto; padding: 0 16px; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow: auto; }
+    section { border-top: 1px solid #ddd; margin-top: 2em; }
+    [contenteditable="true"] { outline: 2px dashed #e0a000; }
+  </style>
+</head>
+<body>
+  <h1>Dynamic Pages</h1>
+  <p>Manual checks for #8. Each section has buttons that change the page after it loaded.</p>
+
+  <section>
+    <h2>Added later</h2>
+    <p><button id="add">Add a block</button> should add a block with exactly one toggle, however often it's clicked.</p>
+    <div id="added"></div>
+  </section>
+
+  <section>
+    <h2>Streaming source</h2>
+    <p>Flip the block to Diagram View, then <button id="stream">Stream more nodes</button>. The Diagram should grow a few times per second, not flicker once per character, and end with every node.</p>
+    <pre id="streamed"><code class="language-mermaid">flowchart LR
+    Start</code></pre>
+  </section>
+
+  <section>
+    <h2>Partial Text Fence</h2>
+    <p>No toggle yet. <button id="close">Add the closing line</button> should give it one.</p>
+    <div id="fence">
+      <p>```mermaid</p>
+      <p>pie title Pets</p>
+      <p>"Dogs" : 40</p>
+      <p>"Cats" : 60</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Removed, changed and edited</h2>
+    <p>Flip each block to Diagram View first.</p>
+    <p><button id="remove">Remove the first block</button>: the block, its toggle and its Diagram all go.</p>
+    <pre id="removable"><code class="language-mermaid">flowchart TD
+    A[Remove me] --> B[Gone]</code></pre>
+    <p><button id="relabel">Relabel as JavaScript</button>: the block returns to its code and loses its toggle.</p>
+    <pre id="relabelled"><code class="language-mermaid">flowchart TD
+    A[Relabel me] --> B[Code again]</code></pre>
+    <p><button id="edit">Toggle edit mode</button>: while the dashed region is editable, the block shows its code with no toggle. It gets the toggle back afterwards.</p>
+    <div id="editable">
+      <pre><code class="language-mermaid">flowchart TD
+    A[View mode] --> B[Edit mode]</code></pre>
+    </div>
+  </section>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let added = 0;
+    $("add").onclick = () => {
+      added++;
+      $("added").insertAdjacentHTML("beforeend", `<pre><code class="language-mermaid">flowchart LR\n    Added${added}[Block ${added}] --> Done</code></pre>`);
+    };
+    $("stream").onclick = async () => {
+      const code = $("streamed").querySelector("code");
+      const more = Array.from({ length: 12 }, (_, i) => ` --> N${i}[Node ${i}]`).join("");
+      for (const ch of more) {
+        code.textContent += ch;
+        await new Promise((r) => setTimeout(r, 30));
+      }
+    };
+    $("close").onclick = () => $("fence").insertAdjacentHTML("beforeend", "<p>```</p>");
+    $("remove").onclick = () => $("removable")?.remove();
+    $("relabel").onclick = () => { $("relabelled").querySelector("code").className = "language-js"; };
+    $("edit").onclick = () => {
+      const region = $("editable");
+      if (region.getAttribute("contenteditable") === "true") region.removeAttribute("contenteditable");
+      else region.setAttribute("contenteditable", "true");
+    };
+  </script>
+</body>
+</html>
