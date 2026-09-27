@@ -106,3 +106,110 @@ describe("Source Repair", () => {
     });
   });
 });
+
+describe("Sniffed Blocks", () => {
+  function sniff(text: string) {
+    const pre = document.createElement("pre");
+    pre.textContent = text;
+    document.body.replaceChildren(pre);
+    return findMermaidBlocks(document.body);
+  }
+
+  test.each([
+    "graph TD\n  A --> B",
+    "graph LR; A-->B",
+    "graph\n  A --> B",
+    "flowchart TB\n  A --> B",
+    "flowchart-elk RL\n  A --> B",
+    "sequenceDiagram\n  A->>B: hi",
+    "classDiagram\n  Animal <|-- Duck",
+    "classDiagram-v2\n  class A",
+    "stateDiagram\n  [*] --> Still",
+    "stateDiagram-v2\n  [*] --> Still",
+    "erDiagram\n  CUSTOMER ||--o{ ORDER : places",
+    "gantt\n  title Plan",
+    "pie\n  \"Dogs\" : 386",
+    "pie showData\n  \"Dogs\" : 386",
+    "pie title Pets\n  \"Dogs\" : 386",
+    "journey\n  title My day",
+    "gitGraph\n  commit",
+    "mindmap\n  root",
+    "timeline\n  title History",
+    "quadrantChart\n  title Reach",
+    "requirementDiagram\n  requirement r {\n  }",
+    "C4Context\n  title System",
+    "C4Container\n  title System",
+    "sankey-beta\n  A,B,10",
+    "xychart-beta\n  title Sales",
+    "xychart-beta horizontal\n  title Sales",
+    "block-beta\n  columns 3",
+    "packet-beta\n  0-15: \"Port\"",
+    "kanban\n  Todo",
+    "architecture-beta\n  service db(database)[DB]",
+  ])("an unlabelled code block starting %j is a Sniffed Block", (text) => {
+    const blocks = sniff(text);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].kind).toBe("sniffed");
+    expect(blocks[0].source).toBe(text);
+    expect(blocks[0].elements).toEqual([document.querySelector("pre")]);
+  });
+
+  test.each([
+    ["leading blank lines", "\n\n  graph TD\n  A --> B"],
+    ["leading %% comments", "%% the login flow\n%% second note\ngraph TD\n  A --> B"],
+    ["front matter", "---\ntitle: Login\nconfig:\n  theme: forest\n---\nflowchart LR\n  A --> B"],
+    ["an init directive", "%%{init: {'theme': 'dark'}}%%\nsequenceDiagram\n  A->>B: hi"],
+  ])("%s before the keyword are allowed", (_name, text) => {
+    expect(sniff(text).map((b) => b.kind)).toEqual(["sniffed"]);
+  });
+
+  test.each([
+    ["Graphviz graph", "graph G {\n  a -- b;\n}"],
+    ["Graphviz digraph", "digraph G {\n  a -> b;\n}"],
+    ["a Python assignment", "graph = build_graph()\nprint(graph)"],
+    ["prose starting with Graph", "Graph theory is the study of graphs."],
+    ["prose starting with a keyword word", "pie is my favourite dessert"],
+    ["a keyword inside a longer word", "graphviz dot -Tpng in.dot"],
+    ["a keyword that isn't first", "print('graph TD')"],
+    ["an empty block", "   \n  "],
+    ["unfinished front matter", "---\ntitle: x\nflowchart LR"],
+  ])("%s is not a Sniffed Block", (_name, text) => {
+    expect(sniff(text)).toEqual([]);
+  });
+
+  test("a block labelled with another language is not sniffed", () => {
+    const root = page(`<pre><code class="language-python">graph TD</code></pre><pre lang="js">graph TD</pre>`);
+
+    expect(findMermaidBlocks(root)).toEqual([]);
+  });
+
+  test.each(["text", "plaintext", "none", "nohighlight"])(
+    "a block labelled %s counts as unlabelled",
+    (lang) => {
+      const root = page(`<pre><code class="language-${lang}">graph TD\n  A --> B</code></pre>`);
+
+      expect(findMermaidBlocks(root).map((b) => b.kind)).toEqual(["sniffed"]);
+    },
+  );
+
+  test("a block that is both labelled and keyword-matched is reported once, as marked", () => {
+    const root = page(`<pre><code class="language-mermaid">graph TD\n  A --> B</code></pre>`);
+
+    expect(findMermaidBlocks(root).map((b) => b.kind)).toEqual(["marked"]);
+  });
+
+  test("Marked and Sniffed Blocks are returned together in document order", () => {
+    const root = page(`
+      <pre>graph TD; one</pre>
+      <pre><code class="language-mermaid">graph TD; two</code></pre>
+      <pre>sequenceDiagram
+  A->>B: three</pre>`);
+
+    expect(findMermaidBlocks(root).map((b) => [b.kind, b.source.split(";")[0].split("\n")[0]])).toEqual([
+      ["sniffed", "graph TD"],
+      ["marked", "graph TD"],
+      ["sniffed", "sequenceDiagram"],
+    ]);
+  });
+});

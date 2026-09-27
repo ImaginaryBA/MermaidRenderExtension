@@ -68,6 +68,19 @@ describe("Render Toggle", () => {
   });
 });
 
+describe("Sniffed Blocks", () => {
+  test("toggle between code and Diagram like Marked Blocks", async () => {
+    await mountPage(`<pre id="code">sequenceDiagram\n  A->>B: hi</pre>`);
+
+    toggles()[0].click();
+    await waitFor(() => expect(diagram()?.textContent).toBe("sequenceDiagram\n  A->>B: hi"));
+    expect(isHidden(document.getElementById("code")!)).toBe(true);
+
+    toggles()[0].click();
+    expect(isHidden(document.getElementById("code")!)).toBe(false);
+  });
+});
+
 describe("Render Error", () => {
   const failOn = (bad: string) =>
     fakeRenderer((source) =>

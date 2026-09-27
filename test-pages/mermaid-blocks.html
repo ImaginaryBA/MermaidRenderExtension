@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Marked Blocks</title>
+  <title>Mermaid Blocks</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2em auto; padding: 0 16px; }
     pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow: auto; }
   </style>
 </head>
 <body>
-  <h1>Marked Blocks</h1>
+  <h1>Mermaid Blocks</h1>
+  <h2>Marked Blocks</h2>
   <p>A <code>language-mermaid</code> code block:</p>
   <pre><code class="language-mermaid">flowchart TD
     A[Reader opens page] --> B{Mermaid Block?}
@@ -34,6 +35,19 @@
   <p>Invalid <em>and</em> repaired (the Render Error mentions the repair):</p>
   <pre><code class="language-mermaid">flowchart LR
 &nbsp;&nbsp;&nbsp;&nbsp;A[&ldquo;Draft&rdquo;] --&gt;</code></pre>
+
+  <h2>Sniffed Blocks</h2>
+  <p>An unlabelled code block, like a Confluence code macro set to "none":</p>
+  <pre>%% keyword detection skips comments
+stateDiagram-v2
+    [*] --&gt; CodeView
+    CodeView --&gt; DiagramView: flip toggle
+    DiagramView --&gt; CodeView: flip toggle</pre>
+
+  <p>Graphviz, which starts with "graph" but isn't Mermaid (no toggle):</p>
+  <pre>graph G {
+    a -- b;
+}</pre>
 
   <p>Not Mermaid (no toggle):</p>
   <pre><code class="language-js">const graph = { A: ["B"] };</code></pre>
