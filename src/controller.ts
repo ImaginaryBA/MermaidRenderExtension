@@ -208,8 +208,9 @@ const STYLE = `
   display: flex; align-items: center; gap: 6px;
 }
 ${BUTTON_STYLE}
-/* The Render Toggle shows on hover or focus, and stays while the Diagram (with its other controls) shows. */
-.controls button { opacity: 0; }
+/* The Render Toggle always shows, half-faded so a page with many blocks stays calm, and in full on hover
+   or focus and while the Diagram (with its other controls) shows. */
+.controls .toggle { opacity: 0.55; }
 :host([data-hover]) button, .controls:focus-within button, .toggle[aria-pressed="true"], .controls .icon { opacity: 1; }
 .diagram:empty { display: none; }
 /* The frame: its size is set by the fitted Diagram, and a zoomed Diagram is clipped to it. */
@@ -299,7 +300,9 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
     // A redraw keeps the previous Diagram on screen until the new one is ready.
     if (!diagram.hasChildNodes()) diagram.textContent = strings.rendering;
     const theme: Theme = prefersDark(doc) ? "dark" : "default";
-    const result = await renderSafely(renderer, drawn.repairedSource, { theme });
+    // The block's width, for diagrams that fill the width they're drawn in; none without layout.
+    const width = host.clientWidth || undefined;
+    const result = await renderSafely(renderer, drawn.repairedSource, { theme, width });
     const svg = result.ok ? parseSvg(doc, result.svg) : null;
     if (current !== generation) return;
     if (svg) {
@@ -332,12 +335,17 @@ function attach(doc: Document, initial: MermaidBlock, renderer: Renderer): Attac
   };
   toggle.addEventListener("click", () => setView(showingDiagram ? "code" : "diagram"));
 
+  /** Lines the toggle up with the block's top edge, wherever margin collapsing has put the host. */
+  const alignToggle = () => {
+    const offset = block.elements[0].getBoundingClientRect().top - host.getBoundingClientRect().top;
+    const value = `${Math.max(0, offset)}px`;
+    // Only written when it changes, as most blocks need no offset at all.
+    if (value !== (host.style.getPropertyValue("--mre-offset") || "0px")) host.style.setProperty("--mre-offset", value);
+  };
+  // The toggle shows before any hover, so it's aligned once the page has laid out, and again on each hover.
+  doc.defaultView?.requestAnimationFrame?.(alignToggle);
   const hover = (on: boolean) => () => {
-    // Line the toggle up with the block's top edge, wherever margin collapsing has put the host.
-    if (on) {
-      const offset = block.elements[0].getBoundingClientRect().top - host.getBoundingClientRect().top;
-      host.style.setProperty("--mre-offset", `${Math.max(0, offset)}px`);
-    }
+    if (on) alignToggle();
     host.toggleAttribute("data-hover", on);
   };
   const hoverOn = hover(true);

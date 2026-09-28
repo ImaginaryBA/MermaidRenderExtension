@@ -6,6 +6,8 @@ export type Theme = "default" | "dark";
 
 export interface RenderOptions {
   theme: Theme;
+  /** The width in pixels the Diagram has to fit, for diagrams that fill the width they're given (such as Gantt charts). */
+  width?: number;
 }
 
 /** Draws Diagrams. The real adapter wraps Mermaid; tests use a fake. */

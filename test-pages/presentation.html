@@ -36,6 +36,17 @@
     A --> B</code></pre>
   <p>Nor this one.</p>
 
+  <h2>Gantt</h2>
+  <p>A Gantt chart fills the block's width, with its dates readable, not squeezed into a narrow chart.</p>
+  <pre><code class="language-mermaid">gantt
+    section Section
+    Completed  :done,   des1, 2014-01-06, 2014-01-08
+    Active     :active, des2, 2014-01-07, 3d
+    Parallel 1 :        des3, after des1, 1d
+    Parallel 2 :        des4, after des1, 1d
+    Parallel 3 :        des5, after des3, 1d
+    Parallel 4 :        des6, after des4, 1d</code></pre>
+
   <h2>Tall</h2>
   <pre><code class="language-mermaid">sequenceDiagram
     participant Reader

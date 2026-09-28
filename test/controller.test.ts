@@ -32,6 +32,16 @@ describe("Render Toggle", () => {
     expect(diagram(1)).toBeNull();
   });
 
+  test("the toggle shows on every block without hovering, half-faded until hovered", async () => {
+    await mountPage(MARKED);
+    const [toggle] = toggles();
+
+    expect(Number(getComputedStyle(toggle).opacity)).toBeGreaterThan(0);
+    expect(Number(getComputedStyle(toggle).opacity)).toBeLessThan(1);
+    hosts()[0].toggleAttribute("data-hover", true);
+    expect(getComputedStyle(toggle).opacity).toBe("1");
+  });
+
   test("the toggle is a pressable button whose label names the view it switches to", async () => {
     await mountPage(MARKED);
     const [toggle] = toggles();
@@ -375,7 +385,7 @@ describe("Editing Surfaces", () => {
 
   test("a block still rendering when its region becomes editable never shows the Diagram", async () => {
     let finish!: (result: RenderResult) => void;
-    const renderer = { calls: [], themes: [], render: () => new Promise<RenderResult>((done) => (finish = done)) };
+    const renderer = { calls: [], themes: [], widths: [], render: () => new Promise<RenderResult>((done) => (finish = done)) };
     await mountPage(`<div id="region">${MARKED}</div>`, { renderer });
     toggles()[0].click();
 
@@ -603,6 +613,25 @@ describe("Diagram presentation", () => {
     await showDiagram();
 
     expect(renderer.themes).toEqual([theme]);
+  });
+
+  test("the renderer is told the width the Diagram has to fit, so width-filling diagrams such as Gantt charts use it", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+    Object.defineProperty(hosts()[0], "clientWidth", { value: 640 });
+
+    await showDiagram();
+
+    expect(renderer.widths).toEqual([640]);
+  });
+
+  test("without a width to go by (no layout), none is given", async () => {
+    const renderer = fakeRenderer();
+    await mountPage(MARKED, { renderer });
+
+    await showDiagram();
+
+    expect(renderer.widths).toEqual([undefined]);
   });
 
   test("without a way to read the colour scheme, the default theme is used", async () => {
