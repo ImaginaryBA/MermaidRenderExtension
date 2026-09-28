@@ -1,13 +1,11 @@
 // Signs the built extension (dist/) through AMO's unlisted channel, producing a .xpi to install by hand.
 // Run with `npm run sign`, which builds and tests first. Credentials come only from the environment:
 // WEB_EXT_API_KEY and WEB_EXT_API_SECRET (from addons.mozilla.org → Developer Hub → Manage API Keys).
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
-import webExt from "web-ext";
+import { fileURLToPath } from "node:url";
 
-const apiKey = process.env.WEB_EXT_API_KEY;
-const apiSecret = process.env.WEB_EXT_API_SECRET;
-if (!apiKey || !apiSecret) {
+if (!process.env.WEB_EXT_API_KEY || !process.env.WEB_EXT_API_SECRET) {
   throw new Error("Set WEB_EXT_API_KEY and WEB_EXT_API_SECRET to your AMO API credentials first (see README.md, Release).");
 }
 
@@ -30,12 +28,14 @@ const sourceArchive = `${artifactsDir}/mermaid-render-${version}-source.zip`;
 await mkdir(artifactsDir, { recursive: true });
 execFileSync("git", ["archive", "--format=zip", `--output=${sourceArchive}`, "HEAD"]);
 
+// The web-ext command line rather than its Node API, which leaves out the command line's defaults
+// (such as AMO's address and the timeouts). It reads WEB_EXT_API_KEY and WEB_EXT_API_SECRET itself.
 console.log(`Signing version ${version} through the unlisted channel…`);
-await webExt.cmd.sign({
-  sourceDir: "dist",
-  artifactsDir,
-  channel: "unlisted",
-  apiKey,
-  apiSecret,
-  uploadSourceCode: sourceArchive,
-});
+// web-ext doesn't export its command-line entry point, so it's found in node_modules directly.
+const webExt = fileURLToPath(new URL("../node_modules/web-ext/bin/web-ext.js", import.meta.url));
+const signing = spawnSync(
+  process.execPath,
+  [webExt, "sign", "--channel", "unlisted", "--source-dir", "dist", "--artifacts-dir", artifactsDir, "--upload-source-code", sourceArchive],
+  { stdio: "inherit" },
+);
+if (signing.status !== 0) throw new Error(`web-ext sign failed (exit code ${signing.status}); see its output above.`);
