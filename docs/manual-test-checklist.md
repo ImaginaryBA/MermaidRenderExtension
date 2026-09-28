@@ -6,7 +6,7 @@ Covers what the automated tests can't: real drawing by Mermaid, how things look,
 
 ## Detecting and drawing (`mermaid-blocks.html`)
 
-- [ ] Hovering over a block shows the "Show diagram" toggle in its top-right corner. Tab reaches it, and Enter or Space flips it.
+- [ ] Every block shows a half-faded "Show diagram" toggle in its top-right corner, in full on hover. Tab reaches it, and Enter or Space flips it.
 - [ ] The Marked Blocks (the flowchart and the sequence diagram) draw. "Show code" brings back the original block exactly.
 - [ ] The invalid block shows a Render Error: "Could not render this diagram.", with Mermaid's message under **Details**.
 - [ ] The curly-quote block draws after Source Repair. The invalid, repaired block's error says spaces or quotes were fixed.
@@ -19,6 +19,7 @@ Covers what the automated tests can't: real drawing by Mermaid, how things look,
 This page's own CSS hides every `svg`, turns buttons pink and puts red dotted borders on every `div`. None of it may reach a Diagram or its controls.
 
 - [ ] A wide diagram fits the column. A small one stays at its natural size. The tall sequence diagram draws.
+- [ ] The Gantt chart fills the block's width, with readable dates.
 - [ ] −, + and fit appear next to the toggle once a Diagram shows. − and fit look dimmed at fitted size, but keep focus.
 - [ ] Ctrl+wheel over a Diagram zooms around the cursor, and a trackpad pinch zooms smoothly. A plain wheel scrolls the page.
 - [ ] When zoomed in, dragging pans. Tab reaches the Diagram, and the arrow keys pan it. The text below never moves.

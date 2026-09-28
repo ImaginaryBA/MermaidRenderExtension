@@ -8,18 +8,23 @@ export interface FakeRenderer extends Renderer {
   calls: string[];
   /** The theme each call asked for, in the same order as `calls`. */
   themes: Theme[];
+  /** The width each call asked for, in the same order as `calls`. */
+  widths: (number | undefined)[];
 }
 
 /** A renderer that "draws" a Diagram as an <svg> whose text is the Mermaid Source. */
 export function fakeRenderer(result?: (source: string) => RenderResult): FakeRenderer {
   const calls: string[] = [];
   const themes: Theme[] = [];
+  const widths: (number | undefined)[] = [];
   return {
     calls,
     themes,
-    async render(source, { theme }) {
+    widths,
+    async render(source, { theme, width }) {
       calls.push(source);
       themes.push(theme);
+      widths.push(width);
       if (result) return result(source);
       const svg = `<svg xmlns="http://www.w3.org/2000/svg"><text>${source}</text></svg>`;
       return { ok: true, svg };

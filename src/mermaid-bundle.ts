@@ -14,11 +14,15 @@ const config = {
 let renders = 0;
 
 globalThis.mermaidRenderExtension ??= {
-  async render(source: string, { theme }: RenderOptions): Promise<RenderResult> {
+  async render(source: string, { theme, width }: RenderOptions): Promise<RenderResult> {
     try {
       mermaid.initialize({ ...config, theme });
       const id = `mermaid-render-extension-${++renders}`;
-      const { svg } = await inRenderWorkspace(document, (container) => mermaid.render(id, source, container));
+      const { svg } = await inRenderWorkspace(document, (container) => {
+        // Diagrams such as Gantt charts fill the width of the element they're drawn in.
+        container.style.width = width ? `${width}px` : "";
+        return mermaid.render(id, source, container);
+      });
       return { ok: true, svg };
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) };
