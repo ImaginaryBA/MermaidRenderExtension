@@ -24,5 +24,13 @@ await new Promise((done) => server.listen(0, "127.0.0.1", done));
 const startUrl = `http://localhost:${server.address().port}/test-pages/mermaid-blocks.html`;
 console.log(`Serving the test page at ${startUrl}`);
 
-const runner = await webExt.cmd.run({ sourceDir: resolve("dist"), startUrl: [startUrl] }, { shouldExitProgram: false });
+// noInput: web-ext would otherwise put the terminal in raw mode to read "R to reload" keys. If npm then
+// exits first, this process lingers holding the terminal, and keystrokes come out doubled. The extension
+// still reloads whenever dist/ changes.
+const runner = await webExt.cmd.run(
+  { sourceDir: resolve("dist"), startUrl: [startUrl], noInput: true },
+  { shouldExitProgram: false },
+);
 runner.registerCleanup(() => server.close());
+// Ctrl+C closes Firefox, which stops the server, and the process ends with nothing left running.
+process.once("SIGINT", () => void runner.exit());
