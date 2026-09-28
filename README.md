@@ -8,7 +8,7 @@ The words used here (Mermaid Block, Render Toggle, Diagram Viewer, Disabled Site
 
 Mermaid Render is signed by Mozilla but not listed on addons.mozilla.org, so you install the `.xpi` file yourself. It needs Firefox 128 or later.
 
-1. Get the signed `mermaid-render-<version>.xpi` (see [Release](#release)).
+1. Get the signed `.xpi`, named `<hash>-<version>.xpi` by AMO (see [Release](#release)).
 2. In Firefox, open `about:addons`, click the gear menu, and choose **Install Add-on From File…**. Pick the `.xpi`.
 3. Firefox's install prompt asks for access to your data for all websites. Accept it: the extension needs it to find Mermaid Blocks. Pages that were already open need a reload.
 
@@ -50,7 +50,9 @@ $env:WEB_EXT_API_SECRET = "…"
 3. Commit.
 4. Run `npm run sign`.
 
-`npm run sign` runs `npm run check` first. It refuses to run with uncommitted changes. It then sends `dist/` to AMO together with a zip of the committed source, because AMO needs readable source for bundled, minified code. It waits for the signature, which usually takes a few minutes. The signed `.xpi` and the source zip end up in `web-ext-artifacts/`, which git ignores.
+`npm run sign` runs `npm run check` first. It refuses to run with uncommitted changes. It then sends `dist/` to AMO together with a zip of the committed source, because AMO needs readable source for bundled, minified code. It waits for the signature, which usually takes a few minutes. The signed `.xpi` (named by AMO, such as `f02b743e23a048ebbbd6-0.1.0.xpi`) and the source zip end up in `web-ext-artifacts/`, which git ignores.
+
+If AMO answers "Unknown JWT iss (issuer)", it doesn't recognise `WEB_EXT_API_KEY`. The key looks like `user:12345678:123` and the secret is a long hex string, so check they aren't swapped or copied with extra characters, or generate a new pair.
 
 The add-on ID, `mermaid-render@imaginaryba`, is fixed forever. Every signed version must keep it.
 
