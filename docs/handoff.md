@@ -8,7 +8,7 @@ Written at the end of a cloud session, for continuing locally, starting with the
 - **Spec:** issue #2. **Open tickets:** #7–#14, each a sub-issue of #2 that lists its blockers.
   - **Ready now:** #7, #8, #9, #10 and #11.
   - **Blocked:** #12 needs #9, #13 needs #10, and #14 needs Confluence samples.
-- **Vocabulary and decisions:** `CONTEXT.md` (glossary) and `docs/adr/0001`–`0003`. ADR 0003 has a Consequences section describing exactly what hiding a block changes on the page.
+- **Vocabulary and decisions:** `GLOSSARY.md` (glossary) and `docs/adr/0001`–`0003`. ADR 0003 has a Consequences section describing exactly what hiding a block changes on the page.
 - **Never run in Firefox.** The cloud container only had Chromium. The built scripts were smoke-tested there with the extension APIs stubbed, so the Firefox-specific wiring hasn't been exercised: the manifest, the background script, `scripting.executeScript` and storage.
 
 ## First: test in Firefox
@@ -61,4 +61,4 @@ If the page shows **no toggles at all**:
 - `anthropic-skills:implement` and `anthropic-skills:tdd`: for #7–#13, at the two seams above.
 - `anthropic-skills:code-review`: two-axis review before each PR.
 - `anthropic-skills:triage`: when the Confluence samples arrive (#14).
-- `anthropic-skills:domain-modeling`: when a new term or hard-to-reverse decision comes up. Keep `CONTEXT.md` and `docs/adr/` current.
+- `anthropic-skills:domain-modeling`: when a new term or hard-to-reverse decision comes up. Keep `GLOSSARY.md` and `docs/adr/` current.
