@@ -184,7 +184,7 @@ function isWebPage(url: string | undefined): boolean {
   return ["http:", "https:", "file:"].includes(protocol) && !ADD_ON_STORES.includes(hostname);
 }
 
-/** The site a Disabled Site setting applies to: the page's hostname (see CONTEXT.md), for web pages served from one. */
+/** The site a Disabled Site setting applies to: the page's hostname (see GLOSSARY.md), for web pages served from one. */
 function siteOf(url: string | undefined): string | null {
   if (!url || !isWebPage(url)) return null;
   return new URL(url).hostname || null;

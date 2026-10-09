@@ -1,15 +1,15 @@
-# Triage labels
+# Triage Labels
 
-The `triage` skill moves issues through five canonical roles. This repo uses the
-default label strings. Each label has the same name as its role.
+The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
 
-| Role              | Label             | Meaning                                                        |
-| ----------------- | ----------------- | -------------------------------------------------------------- |
-| `needs-triage`    | `needs-triage`    | New; not yet categorised or verified.                          |
-| `needs-info`      | `needs-info`      | Blocked waiting on more information from the reporter.         |
-| `ready-for-agent` | `ready-for-agent` | Has an agent-ready brief; an agent can pick it up.             |
-| `ready-for-human` | `ready-for-human` | Actionable, but needs human judgement or access to implement.  |
-| `wontfix`         | `wontfix`         | Deliberately not being done; close with a reason.              |
+| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
+| -------------------------- | -------------------- | ---------------------------------------- |
+| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
+| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
+| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
+| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
+| `wontfix`                  | `wontfix`            | Will not be actioned                     |
 
-If a label doesn't exist on the tracker yet, create it before applying it
-(for example, `gh label create ready-for-agent`).
+When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
+
+Edit the "Label in our tracker" column to match whatever vocabulary you actually use.

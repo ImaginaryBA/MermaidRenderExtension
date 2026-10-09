@@ -2,7 +2,7 @@
 
 A Firefox extension that finds the Mermaid Blocks on a web page and lets you swap each one for the Diagram it describes, one block at a time. It finds code blocks labelled as Mermaid, unlabelled code that starts with a Mermaid diagram keyword, and ```` ```mermaid ```` fences typed as plain text (as on wiki pages). Diagrams can be zoomed inline or opened full screen in the Diagram Viewer. The toolbar popup can switch every block on the page at once (Render all, Show all code), or turn the extension off for a site.
 
-The words used here (Mermaid Block, Render Toggle, Diagram Viewer, Disabled Site…) are defined in [CONTEXT.md](CONTEXT.md).
+The words used here (Mermaid Block, Render Toggle, Diagram Viewer, Disabled Site…) are defined in [GLOSSARY.md](GLOSSARY.md).
 
 ## Install
 
